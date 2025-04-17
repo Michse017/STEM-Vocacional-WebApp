@@ -1,0 +1,65 @@
+.topBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 5%;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  position: fixed;
+  width: 100%;
+  top: 0;
+  z-index: 1000;
+  box-shadow: 0 2px 20px rgba(0,0,0,0.05);
+}
+
+.logoContainer {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  text-decoration: none;
+}
+
+.logo {
+  height: 45px;
+  width: auto;
+  transition: transform 0.3s ease;
+}
+
+.logo:hover {
+  transform: rotate(-5deg);
+}
+
+.appTitle {
+  color: #0f172a;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin: 0;
+}
+
+.loginButton {
+  background: none;
+  color: #2563eb;
+  padding: 0.8rem 2rem;
+  border: 2px solid #2563eb;
+  border-radius: 8px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.loginButton:hover {
+  background: #2563eb;
+  color: white;
+  transform: translateY(-2px);
+}
+
+.appTitle {
+  font-family: 'Inter', sans-serif;
+  /* Mantener otros estilos */
+}
+
+.loginButton {
+  font-family: 'Inter', sans-serif;
+  /* Mantener otros estilos */
+}

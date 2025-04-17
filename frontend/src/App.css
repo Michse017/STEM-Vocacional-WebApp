@@ -1,0 +1,63 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.app-container {
+  min-height: 100vh;
+  display: flex;
+}
+
+/* Panel izquierdo */
+.left-panel {
+  flex: 1;
+  background: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+}
+
+.title {
+  color: #2563eb;  /* Azul vibrante */
+  font-size: 4rem;
+  font-weight: 700;
+  text-align: center;
+  max-width: 800px;
+  line-height: 1.2;
+}
+
+/* Panel derecho */
+.right-panel {
+  flex: 1;
+  background: #f0fdfa;  /* Verde muy claro */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+}
+
+/* Fuente global */
+body {
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Reset de estilos para elementos específicos */
+button, input, textarea {
+  font-family: inherit;
+}
+
+/* Responsive para móviles */
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column;
+  }
+
+  .title {
+    font-size: 2.5rem;
+    margin-bottom: 2rem;
+  }
+}

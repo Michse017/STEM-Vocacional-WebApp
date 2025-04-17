@@ -9,7 +9,6 @@ __pycache__/
 *.py[cod]
 
 *.csv
-*.json
 *.pkl
 .env
 .env.local
