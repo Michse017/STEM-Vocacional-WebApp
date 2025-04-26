@@ -1,8 +1,6 @@
-"use client";
-
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import TopBar from "./components/TopBar/TopBar";
-import LandingPage from "./components/LandingPage/LandingPage";
+import LandingPage from "./pages/LandingPage/LandingPage";
 import "./App.css";
 
 function App() {
