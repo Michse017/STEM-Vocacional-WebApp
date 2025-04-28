@@ -4,6 +4,7 @@ import LandingPage from "./pages/LandingPage/LandingPage";
 import Dashboard from "./pages/Dashboard/Dashboard";
 import Cuestionarios from "./pages/Cuestionarios/Cuestionarios";
 import Perfil from "./pages/Perfil/Perfil";
+import OrientadorDashboard from "./pages/Orientador/OrientadorDashboard";
 import "./App.css";
 
 function AppContent() {
@@ -11,7 +12,8 @@ function AppContent() {
   const hideTopBar =
     location.pathname.toLowerCase().startsWith("/dashboard") ||
     location.pathname.toLowerCase().startsWith("/cuestionarios") ||
-    location.pathname.toLowerCase().startsWith("/perfil");
+    location.pathname.toLowerCase().startsWith("/perfil") ||
+    location.pathname.toLowerCase().startsWith("/orientador"); // <-- añade esto
 
   return (
     <div className="app">
@@ -22,6 +24,7 @@ function AppContent() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/cuestionarios" element={<Cuestionarios />} />
           <Route path="/perfil" element={<Perfil />} />
+          <Route path="/orientador" element={<OrientadorDashboard />} />
           {/* Add more routes as needed */}
           <Route path="*" element={<LandingPage />} />
         </Routes>

@@ -1,0 +1,290 @@
+.tableContainer {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .tableControls {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+  
+  .searchContainer {
+    position: relative;
+    flex: 1;
+    max-width: 300px;
+  }
+  
+  .searchIcon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted-light);
+  }
+  
+  body.dark-mode .searchIcon {
+    color: var(--text-muted-dark);
+  }
+  
+  .searchInput {
+    width: 100%;
+    padding: 0.5rem 0.5rem 0.5rem 2rem;
+    border-radius: 4px;
+    border: 1px solid var(--border-light);
+    font-size: 0.9rem;
+    background-color: var(--background-light);
+    color: var(--text-light);
+  }
+  
+  body.dark-mode .searchInput {
+    border-color: var(--border-dark);
+    background-color: var(--background-dark);
+    color: var(--text-dark);
+  }
+  
+  .searchInput:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(0, 112, 243, 0.2);
+  }
+  
+  .filterButton {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    border: 1px solid var(--border-light);
+    background-color: var(--background-light);
+    color: var(--text-light);
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+  
+  body.dark-mode .filterButton {
+    border-color: var(--border-dark);
+    background-color: var(--background-dark);
+    color: var(--text-dark);
+  }
+  
+  .filterButton:hover {
+    background-color: rgba(0, 112, 243, 0.1);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+  }
+  
+  .tableWrapper {
+    overflow-x: auto;
+    border-radius: 8px;
+    border: 1px solid var(--border-light);
+  }
+  
+  body.dark-mode .tableWrapper {
+    border-color: var(--border-dark);
+  }
+  
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+  
+  .table th,
+  .table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+  }
+  
+  .table th {
+    background-color: rgba(0, 0, 0, 0.02);
+    font-weight: 600;
+    color: var(--text-muted-light);
+    border-bottom: 1px solid var(--border-light);
+  }
+  
+  body.dark-mode .table th {
+    background-color: rgba(255, 255, 255, 0.02);
+    color: var(--text-muted-dark);
+    border-bottom-color: var(--border-dark);
+  }
+  
+  .table tbody tr {
+    border-bottom: 1px solid var(--border-light);
+  }
+  
+  body.dark-mode .table tbody tr {
+    border-bottom-color: var(--border-dark);
+  }
+  
+  .table tbody tr:last-child {
+    border-bottom: none;
+  }
+  
+  .table tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+  }
+  
+  body.dark-mode .table tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.02);
+  }
+  
+  .sortableHeader {
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  
+  .sortableHeader:hover {
+    color: var(--primary-color);
+  }
+  
+  .nameCell {
+    font-weight: 500;
+  }
+  
+  .statusBadge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
+  
+  .statusCompleted {
+    background-color: rgba(0, 200, 150, 0.1);
+    color: var(--secondary-color);
+  }
+  
+  .statusInProgress {
+    background-color: rgba(255, 170, 0, 0.1);
+    color: #ffaa00;
+  }
+  
+  .statusNotStarted {
+    background-color: rgba(200, 200, 200, 0.2);
+    color: #888888;
+  }
+  
+  .actionsHeader {
+    width: 80px;
+    text-align: center;
+  }
+  
+  .actionsCell {
+    width: 80px;
+    text-align: center;
+  }
+  
+  .actionsWrapper {
+    position: relative;
+    display: inline-block;
+  }
+  
+  .actionsButton {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted-light);
+    padding: 0.25rem;
+    border-radius: 4px;
+  }
+  
+  body.dark-mode .actionsButton {
+    color: var(--text-muted-dark);
+  }
+  
+  .actionsButton:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    color: var(--primary-color);
+  }
+  
+  body.dark-mode .actionsButton:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+  
+  .actionsDropdown {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    z-index: 10;
+    background-color: var(--background-light);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px var(--shadow-light);
+    min-width: 150px;
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  body.dark-mode .actionsDropdown {
+    background-color: var(--background-dark);
+    box-shadow: 0 4px 12px var(--shadow-dark);
+  }
+  
+  .actionItem {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    border-radius: 4px;
+    border: none;
+    background: none;
+    text-align: left;
+    font-size: 0.9rem;
+    color: var(--text-light);
+    cursor: pointer;
+    width: 100%;
+  }
+  
+  body.dark-mode .actionItem {
+    color: var(--text-dark);
+  }
+  
+  .actionItem:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+  }
+  
+  body.dark-mode .actionItem:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+  
+  .deleteAction {
+    color: #e53935;
+  }
+  
+  body.dark-mode .deleteAction {
+    color: #f44336;
+  }
+  
+  .noResults {
+    padding: 2rem;
+    text-align: center;
+    color: var(--text-muted-light);
+    font-style: italic;
+  }
+  
+  body.dark-mode .noResults {
+    color: var(--text-muted-dark);
+  }
+  
+  @media (max-width: 768px) {
+    .tableControls {
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+  
+    .searchContainer {
+      max-width: 100%;
+    }
+  
+    .table th,
+    .table td {
+      padding: 0.5rem;
+    }
+  }
+  
