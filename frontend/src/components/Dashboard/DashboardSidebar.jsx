@@ -15,7 +15,7 @@ const DashboardSidebar = ({ isOpen }) => {
     <div className={`${styles.sidebar} ${isOpen ? styles.open : styles.closed}`}>
       <div className={styles.sidebarHeader}>
         <div className={styles.logo}>
-          <span className={styles.logoText}>STEM</span>
+          <span className={styles.logoText}>STEM Vocational</span>
         </div>
       </div>
 

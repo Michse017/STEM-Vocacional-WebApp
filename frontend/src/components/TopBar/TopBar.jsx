@@ -15,7 +15,6 @@ const TopBar = () => {
     <nav className={styles.topbar}>
       <div className={styles.logoContainer}>
         <Link to="/" className={styles.logoLink}>
-          <img src="/utb.png" alt="UTB Logo" className={styles.logo} />
           <h1 className={styles.appName}>STEM Vocational</h1>
         </Link>
       </div>
