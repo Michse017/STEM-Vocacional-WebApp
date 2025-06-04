@@ -5,6 +5,7 @@ import Dashboard from "./pages/Dashboard/Dashboard";
 import Cuestionarios from "./pages/Cuestionarios/Cuestionarios";
 import Perfil from "./pages/Perfil/Perfil";
 import OrientadorDashboard from "./pages/Orientador/OrientadorDashboard";
+import ValidationQuestionnaire from "./pages/validation/ValidationQuestionnaire";
 import "./App.css";
 
 function AppContent() {
@@ -25,6 +26,7 @@ function AppContent() {
           <Route path="/cuestionarios" element={<Cuestionarios />} />
           <Route path="/perfil" element={<Perfil />} />
           <Route path="/orientador" element={<OrientadorDashboard />} />
+          <Route path="/validacion" element={<ValidationQuestionnaire />} />
           {/* Add more routes as needed */}
           <Route path="*" element={<LandingPage />} />
         </Routes>
