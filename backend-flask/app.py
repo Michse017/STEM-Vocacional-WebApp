@@ -14,8 +14,16 @@ from datetime import datetime
 def create_app():
     app = Flask(__name__)
     
-    # Configuración
-    app.config.from_object(Config)
+    # AGREGAR: Detectar si estamos en Render
+    if os.getenv('RENDER'):
+        # Configuración para Render
+        app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
+        app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+        print("🚀 Configuración RENDER cargada")
+    else:
+        # Tu configuración local actual
+        app.config.from_object(Config)
+        print("🏠 Configuración LOCAL cargada")
     
     # Habilitar CORS
     CORS(app)
@@ -87,25 +95,25 @@ def create_app():
 if __name__ == '__main__':
     app = create_app()
     
-    print("Variables de entorno:")
-    print(f"DB_SERVER: {os.getenv('DB_SERVER', 'localhost')}")
-    print(f"DB_NAME: {os.getenv('DB_NAME', 'sistema_estudiantes')}")
-    print(f"DB_USER: {os.getenv('DB_USER', 'stemuser')}")
-    print(f"PORT: {os.getenv('PORT', '5000')}")
+    # Solo mostrar info en local
+    if not os.getenv('RENDER'):
+        print("Variables de entorno:")
+        print(f"DB_SERVER: {os.getenv('DB_SERVER', 'localhost')}")
+        print(f"DB_NAME: {os.getenv('DB_NAME', 'sistema_estudiantes')}")
+        print(f"DB_USER: {os.getenv('DB_USER', 'stemuser')}")
+        print(f"PORT: {os.getenv('PORT', '5000')}")
+        
+        with app.app_context():
+            try:
+                print('Intentando conectar a la base de datos...')
+                from sqlalchemy import text
+                db.session.execute(text('SELECT 1'))
+                db.create_all()
+                print('✅ Conectado a SQL Server con Flask')
+                print('✅ Tablas creadas exitosamente')
+            except Exception as e:
+                print(f'❌ Error conectando a SQL Server: {e}')
     
-    with app.app_context():
-        try:
-            print('Intentando conectar a la base de datos...')
-            # Importar text para SQLAlchemy
-            from sqlalchemy import text
-            # Usar text() para queries SQL explícitas
-            db.session.execute(text('SELECT 1'))
-            # Crear todas las tablas
-            db.create_all()
-            print('✅ Conectado a SQL Server con Flask')
-            print('✅ Tablas creadas exitosamente')
-        except Exception as e:
-            print(f'❌ Error conectando a SQL Server: {e}')
-    
-    port = int(os.getenv('PORT', 5000))
-    app.run(debug=True, host='0.0.0.0', port=port)
+    port = int(os.environ.get('PORT', 5000))
+    debug = not os.getenv('RENDER')  # Debug solo en local
+    app.run(debug=debug, host='0.0.0.0', port=port)
