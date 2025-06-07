@@ -15,31 +15,14 @@ from datetime import datetime
 def create_app():
     app = Flask(__name__)
     
-    # Detectar si estamos en Render
-    if os.getenv('RENDER'):
-        # Configuración para Render
-        app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
-        app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-        print("🚀 Configuración RENDER cargada")
-    else:
-        # Tu configuración local actual
-        app.config.from_object(Config)
-        print("🏠 Configuración LOCAL cargada")
+    # Tu configuración local original
+    app.config.from_object(Config)
     
     # Habilitar CORS
     CORS(app)
     
     # Inicializar base de datos
     db.init_app(app)
-    
-    # Crear tablas en Render
-    if os.getenv('RENDER'):
-        with app.app_context():
-            try:
-                db.create_all()
-                print("✅ Tablas creadas en PostgreSQL")
-            except Exception as e:
-                print(f"⚠️ Error creando tablas: {e}")
     
     # Registrar blueprints (rutas)
     app.register_blueprint(usuario_bp)
@@ -52,11 +35,7 @@ def create_app():
     # Rutas básicas
     @app.route('/')
     def home():
-        return jsonify({
-            'message': 'API STEM Vocacional funcionando',
-            'status': 'success',
-            'environment': 'Render' if os.getenv('RENDER') else 'Local'
-        })
+        return jsonify({'message': 'API STEM Vocacional funcionando localmente'})
     
     @app.route('/health')
     def health():
@@ -65,7 +44,6 @@ def create_app():
             return jsonify({
                 'status': 'healthy',
                 'database': 'connected',
-                'environment': 'Render' if os.getenv('RENDER') else 'Local',
                 'timestamp': datetime.now().isoformat()
             }), 200
         except Exception as e:
@@ -73,16 +51,28 @@ def create_app():
                 'status': 'unhealthy',
                 'database': 'disconnected',
                 'error': str(e),
-                'environment': 'Render' if os.getenv('RENDER') else 'Local',
                 'timestamp': datetime.now().isoformat()
             }), 500
     
     return app
 
-# ESTA LÍNEA ES CRÍTICA PARA GUNICORN
-app = create_app()
-
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    debug = not os.getenv('RENDER')
-    app.run(debug=debug, host='0.0.0.0', port=port)
+    app = create_app()
+    
+    print("Variables de entorno:")
+    print(f"DB_SERVER: {os.getenv('DB_SERVER', 'localhost')}")
+    print(f"DB_NAME: {os.getenv('DB_NAME', 'sistema_estudiantes')}")
+    print(f"DB_USER: {os.getenv('DB_USER', 'stemuser')}")
+    print(f"PORT: {os.getenv('PORT', '5000')}")
+    
+    with app.app_context():
+        try:
+            print('Intentando conectar a la base de datos...')
+            db.session.execute(text('SELECT 1'))
+            db.create_all()
+            print('✅ Conectado a SQL Server con Flask')
+            print('✅ Tablas creadas exitosamente')
+        except Exception as e:
+            print(f'❌ Error conectando a SQL Server: {e}')
+    
+    app.run(debug=True, host='0.0.0.0', port=5000)
