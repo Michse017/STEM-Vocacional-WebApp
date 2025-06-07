@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Cuestionario - STEM Vocacional</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script>
+    function toggleDimension(idx) {
+        var block = document.getElementById('dim_block_' + idx);
+        if (block.style.display === 'none' || block.style.display === '') {
+            block.style.display = 'block';
+        } else {
+            block.style.display = 'none';
+        }
+    }
+    </script>
+</head>
+<body>
+    <h2>Cuestionario de Validación y Actualización de Datos</h2>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="flash">
+          {% for message in messages %}
+            <div>{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    <form method="post">
+        {% for dim_idx in range(dimensions|length) %}
+            {% set dim = dimensions[dim_idx] %}
+            <div class="dimension-card">
+                <button type="button" class="dimension-btn" onclick="toggleDimension({{ dim_idx }})">
+                    <span class="arrow">&#9654;</span> {{ dim.dimension }}
+                </button>
+                <div id="dim_block_{{ dim_idx }}" class="dimension-content">
+                    {% set num_questions = dim.questions|length %}
+                    <input type="hidden" name="num_questions_dim_{{ dim_idx }}" value="{{ num_questions }}">
+                    {% for q_idx in range(num_questions) %}
+                        {% set q = dim.questions[q_idx] %}
+                        <div class="question-block">
+                            <label>{{ q.text }}</label><br>
+                            {% if q.type == "opcion_unica" %}
+                                <div class="radio-group">
+                                {% for opt in q.options %}
+                                    <label>
+                                        <input type="radio" name="dim_{{ dim_idx }}_q_{{ q_idx }}" value="{{ opt }}"{% if q.value == opt %} checked{% endif %}>
+                                        {{ opt }}
+                                    </label>
+                                {% endfor %}
+                                </div>
+                            {% elif q.type == "numero" %}
+                                <input type="number" min="0" step="any" name="dim_{{ dim_idx }}_q_{{ q_idx }}" value="{{ q.value }}" class="input-field">
+                            {% else %}
+                                <input type="text" name="dim_{{ dim_idx }}_q_{{ q_idx }}" value="{{ q.value }}" class="input-field">
+                            {% endif %}
+                            <input type="hidden" name="dim_{{ dim_idx }}_q_{{ q_idx }}_var"
+                                   value="{% if q.variable is string %}{{ q.variable }}{% else %}{{ q.variable|join(',') }}{% endif %}">
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endfor %}
+        <button type="submit" class="submit-btn">Enviar</button>
+    </form>
+    <a href="{{ url_for('logout') }}" class="logout-link">Cerrar sesión</a>
+    <script>
+      // Estilo para flecha de despliegue (gira cuando abierto)
+      document.querySelectorAll('.dimension-btn').forEach(function(btn, idx) {
+        btn.addEventListener('click', function() {
+          var block = document.getElementById('dim_block_' + idx);
+          var arrow = btn.querySelector('.arrow');
+          if (block.style.display === 'block') {
+            arrow.style.transform = 'rotate(0deg)';
+          } else {
+            arrow.style.transform = 'rotate(90deg)';
+          }
+        });
+      });
+    </script>
+</body>
+</html>
