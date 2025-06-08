@@ -4,7 +4,6 @@ from app.config.database import Config
 from app.models.models import db
 from app.routes.usuario_routes import usuario_bp
 from app.routes.cognitiva_routes import cognitiva_bp
-from app.routes.educativa_routes import educativa_bp
 from app.routes.educativa_familiar_routes import educativa_familiar_bp
 from app.routes.socioeconomica_routes import socioeconomica_bp
 from app.routes.autoeficacia_routes import autoeficacia_bp
@@ -26,7 +25,6 @@ def create_app():
     # Registrar blueprints (rutas)
     app.register_blueprint(usuario_bp)
     app.register_blueprint(cognitiva_bp)
-    app.register_blueprint(educativa_bp)
     app.register_blueprint(educativa_familiar_bp)
     app.register_blueprint(socioeconomica_bp)
     app.register_blueprint(autoeficacia_bp)
