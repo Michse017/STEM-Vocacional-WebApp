@@ -61,26 +61,6 @@ class RespuestaCognitiva(db.Model):
             'fecha_actualizacion': self.fecha_actualizacion.isoformat() if self.fecha_actualizacion else None
         }
 
-class RespuestaEducativa(db.Model):
-    __tablename__ = 'resp_educativa'
-    
-    id_respuesta = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    id_usuario = db.Column(db.Integer, db.ForeignKey('usuarios.id_usuario'), nullable=False)
-    puntaje_educacion = db.Column(db.Float)
-    nivel_educativo = db.Column(db.String(255))
-    institucion = db.Column(db.String(255))
-    fecha_respuesta = db.Column(db.DateTime)
-    
-    def to_dict(self):
-        return {
-            'id_respuesta': self.id_respuesta,
-            'id_usuario': self.id_usuario,
-            'puntaje_educacion': self.puntaje_educacion,
-            'nivel_educativo': self.nivel_educativo,
-            'institucion': self.institucion,
-            'fecha_respuesta': self.fecha_respuesta.isoformat() if self.fecha_respuesta else None
-        }
-
 class RespuestaEducativaFamiliar(db.Model):
     __tablename__ = 'resp_educativa_familiar'
     
