@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Panel de Respuestas - STEM Vocacional</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+      .dimension-section {border:1px solid #aaa;margin-bottom:16px;padding:10px;border-radius:8px;}
+      .dimension-title {font-size:1.2em;font-weight:bold;margin-bottom:10px;color:#2a6;}
+      .question-row {margin-bottom:8px;}
+      .question-label {font-weight:bold;}
+      .respuesta {color:#336;}
+      .volver-btn {margin-top:30px;}
+      .logout-link {float:right;color:#c00;}
+    </style>
+</head>
+<body>
+    <h2>Panel de Respuestas de {{ codigo }}</h2>
+    <a href="{{ url_for('logout') }}" class="logout-link">Cerrar sesión</a>
+    {% for dim in dimensions %}
+    <div class="dimension-section">
+        <div class="dimension-title">{{ dim.dimension }}</div>
+        {% for q in dim.questions %}
+            <div class="question-row">
+                <span class="question-label">{{ q.text }}</span><br>
+                <span class="respuesta">
+                  {% if q.value is not none and q.value != "" %}
+                    {{ q.value }}
+                  {% else %}
+                    <em>Sin respuesta</em>
+                  {% endif %}
+                </span>
+            </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+    <a href="{{ url_for('questionnaire') }}" class="volver-btn">Volver al cuestionario</a>
+</body>
+</html>
