@@ -46,9 +46,9 @@ QUESTIONNAIRE_STRUCTURE = [
                 "options": ["Sí", "No"]
             },
             {
-                "text": "¿En qué año presentaste Saber Pro?",
+                "text": "¿Cuál fue tu puntaje en Saber Pro (ECAES)?",
                 "variable": "ecaes",
-                "type": "texto"
+                "type": "numero"
             },
             {"text": "¿Cuál es tu promedio acumulado actual?", "variable": "pga_acumulado", "type": "numero"},
             {"text": "¿Cuál es tu promedio del último periodo?", "variable": "promedio_periodo", "type": "numero"},

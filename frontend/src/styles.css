@@ -25,6 +25,7 @@ body {
   background-color: var(--background-light);
   color: var(--text-light);
   transition: background-color 0.3s ease, color 0.3s ease;
+  line-height: 1.6;
 }
 
 body.dark-mode {
@@ -45,37 +46,69 @@ main {
 .footer {
   text-align: center;
   padding: 2rem;
-  background-color: #f5f5f5;
-  color: #666;
+  background-color: #f8fafc;
+  color: #64748b;
   font-size: 0.9rem;
+  border-top: 1px solid #e2e8f0;
 }
 
 body.dark-mode .footer {
   background-color: #1a1a1a;
   color: #b0b0b0;
+  border-top-color: #333333;
 }
 
-a {
-  text-decoration: none;
-  color: var(--primary-color);
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
 }
 
-button {
-  cursor: pointer;
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
 }
 
-/* Utility Classes */
-.container {
-  width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 1rem;
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
 }
 
-.text-gradient {
-  background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
 }
 
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Focus styles for accessibility */
+button:focus-visible,
+input:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* Animation utilities */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Responsive utilities */
+@media (max-width: 768px) {
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
