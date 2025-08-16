@@ -1,1 +1,0 @@
-# Este archivo hace que la carpeta config sea un paquete Python
