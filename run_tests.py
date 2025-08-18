@@ -31,7 +31,7 @@ def run_tests():
             "show_errors": False
         },
         {
-            "name": "📋 Listar pruebas disponibles",
+            "name": "� Listar pruebas disponibles",
             "cmd": ["python", "-m", "pytest", "tests/", "--collect-only", "-q"],
             "show_output": True,
             "show_errors": True
