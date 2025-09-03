@@ -3,6 +3,18 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { enviarCuestionario } from "../api";
 import { secciones } from "./cuestionarioConfig"; // Importamos la configuración
 
+/**
+ * Formatea una cadena de fecha (de la DB o de un input) al formato YYYY-MM-DD.
+ * @param {string} dateString - La fecha en formato ISO o similar.
+ * @returns {string} La fecha en formato YYYY-MM-DD.
+ */
+const formatDateForInput = (dateString) => {
+  if (!dateString) return "";
+  // Toma la parte de la fecha antes de la 'T' si es un formato ISO completo.
+  return dateString.split('T')[0];
+};
+
+
 export default function Cuestionario() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -23,8 +35,25 @@ export default function Cuestionario() {
       return;
     }
     if (respuestasPrevias) {
+      const socioData = { ...(respuestasPrevias.sociodemografica || {}) };
+
+      // Convertir todos los valores de sociodemografica a string para los inputs
+      Object.keys(socioData).forEach(key => {
+        if (socioData[key] !== null && socioData[key] !== undefined) {
+          socioData[key] = String(socioData[key]);
+        }
+      });
+      
+      // Formatear las fechas que vienen de la DB para que el input las muestre
+      if (socioData.fecha_nacimiento) {
+        socioData.fecha_nacimiento = formatDateForInput(socioData.fecha_nacimiento);
+      }
+      if (socioData.fecha_graduacion_bachillerato) {
+        socioData.fecha_graduacion_bachillerato = formatDateForInput(socioData.fecha_graduacion_bachillerato);
+      }
+
       setFormData({
-        sociodemografica: respuestasPrevias.sociodemografica || {},
+        sociodemografica: socioData,
         inteligencias_multiples: respuestasPrevias.inteligencias_multiples || {},
       });
     }
@@ -46,16 +75,39 @@ export default function Cuestionario() {
     setError("");
     setSuccess("");
 
+    // --- LIMPIEZA Y PREPARACIÓN DE DATOS ANTES DE ENVIAR ---
+    const cleanedSociodemografica = { ...formData.sociodemografica };
+
+    // 1. Convertir puntajes a números. Si están vacíos o no son válidos, se envían como 0.
+    const puntajes = [
+      'puntaje_global_saber11', 'puntaje_matematicas', 'puntaje_lectura_critica',
+      'puntaje_ciencias_naturales', 'puntaje_competencias_ciudadanas', 'puntaje_ingles'
+    ];
+    puntajes.forEach(puntaje => {
+      cleanedSociodemografica[puntaje] = parseInt(cleanedSociodemografica[puntaje] || 0, 10);
+    });
+
+    // 2. Asegurar que las fechas se envíen en el formato correcto (YYYY-MM-DD)
+    if (cleanedSociodemografica.fecha_nacimiento) {
+      cleanedSociodemografica.fecha_nacimiento = formatDateForInput(cleanedSociodemografica.fecha_nacimiento);
+    }
+    if (cleanedSociodemografica.fecha_graduacion_bachillerato) {
+      cleanedSociodemografica.fecha_graduacion_bachillerato = formatDateForInput(cleanedSociodemografica.fecha_graduacion_bachillerato);
+    }
+    
     try {
       const payload = {
         id_usuario: usuario.id_usuario,
-        ...formData,
+        sociodemografica: cleanedSociodemografica,
+        inteligencias_multiples: formData.inteligencias_multiples,
       };
+
       const resultado = await enviarCuestionario(payload);
       setSuccess(resultado.message || "Respuestas guardadas con éxito.");
       
       setTimeout(() => {
-        navigate("/dashboard", { state: { usuario, respuestas: formData } });
+        // CORRECCIÓN: Navegamos con los datos del payload que ya están limpios
+        navigate("/dashboard", { state: { usuario, respuestas: payload } });
       }, 1500);
 
     } catch (err) {
@@ -83,7 +135,6 @@ export default function Cuestionario() {
             {seccion.preguntas.map(pregunta => (
               <div key={pregunta.id} className="form-group">
                 
-                {/* CORRECCIÓN: La etiqueta <label> solo se muestra para preguntas que no son de tipo 'vf' */}
                 {pregunta.tipo !== 'vf' && (
                   <label htmlFor={pregunta.id}>{pregunta.texto}</label>
                 )}
@@ -127,7 +178,6 @@ export default function Cuestionario() {
                   />
                 )}
                 {pregunta.tipo === "vf" && (
-                  // Para el tipo 'vf', el texto de la pregunta ya está dentro del div, así que no necesitamos la label de arriba.
                   <div className="pregunta-vf">
                     <p>{pregunta.texto}</p>
                     <div className="radio-group">

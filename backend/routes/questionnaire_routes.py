@@ -12,6 +12,13 @@ def submit_questionnaire():
     db_session = SessionLocal()
     try:
         json_data = request.get_json()
+        
+        # --- DEBUGGING: Imprimir los datos recibidos ---
+        print("--- DATOS RECIBIDOS DEL FRONTEND ---")
+        import json
+        print(json.dumps(json_data, indent=2))
+        print("------------------------------------")
+        
         if not json_data:
             return jsonify({"status": "error", "message": "No se recibieron datos."}), 400
 

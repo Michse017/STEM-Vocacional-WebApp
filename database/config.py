@@ -57,15 +57,38 @@ def get_database_url(interactive=False):
         f"timeout=30"
     )
 
-# --- Instancias de SQLAlchemy ---
-# Se crea el motor una sola vez. get_database_url() se llama aquí,
-# por lo que es crucial que DB_PASSWORD esté seteada antes de iniciar la app.
-engine = create_engine(get_database_url())
+from sqlalchemy import create_engine, URL
+
+def create_sqlalchemy_engine():
+    """Crea el motor de SQLAlchemy de forma segura."""
+    try:
+        # Construye la URL de forma segura para evitar problemas de codificación
+        connection_url = URL.create(
+            "mssql+pyodbc",
+            username=DB_USER,
+            password=get_password(),
+            host=DB_SERVER,
+            port=DB_PORT,
+            database=DB_DATABASE,
+            query={
+                "driver": DB_DRIVER.strip('{}'), # <-- Cambio aquí
+                "encrypt": "yes",
+                "TrustServerCertificate": "no",
+                "timeout": "30",
+            },
+        )
+        return create_engine(connection_url)
+    except Exception as e:
+        print(f"❌ Error al crear el motor de SQLAlchemy: {e}", file=sys.stderr)
+        sys.exit(1)
+
+engine = create_sqlalchemy_engine()
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 # --- Funciones para Test Interactivo ---
 def get_connection_string_for_test():
+# ... existing code ...
     """Función de test que siempre pide contraseña si no está seteada."""
     password = get_password(interactive=True)
     return (
