@@ -1,29 +1,42 @@
-import { useState } from "react"
-import { useNavigate } from "react-router-dom"
-import { login } from "../api"
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { crearOObtenerUsuario, obtenerRespuestas } from "../api";
 
 export default function Login() {
-  const [codigo, setCodigo] = useState("")
-  const [password, setPassword] = useState("")
-  const [error, setError] = useState("")
-  const [loading, setLoading] = useState(false)
-  const navigate = useNavigate()
+  const [codigoEstudiante, setCodigoEstudiante] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setError("")
-    setLoading(true)
-
-    const res = await login(codigo.trim())
-
-    if (res.success) {
-      localStorage.setItem("codigo_estudiante", res.codigo_estudiante)
-      navigate("/cuestionario")
-    } else {
-      setError(res.message || "Código incorrecto")
+    e.preventDefault();
+    if (!codigoEstudiante.trim()) {
+      setError("Por favor, ingresa tu código de estudiante.");
+      return;
     }
-    setLoading(false)
-  }
+    setLoading(true);
+    setError("");
+
+    try {
+      // 1. Validar el usuario. Ahora `crearOObtenerUsuario` solo valida.
+      const usuario = await crearOObtenerUsuario(codigoEstudiante);
+      
+      // 2. Intentar obtener las respuestas guardadas
+      const respuestasGuardadas = await obtenerRespuestas(usuario.id_usuario);
+
+      // 3. Navegar al dashboard o al cuestionario
+      if (respuestasGuardadas) {
+        navigate("/dashboard", { state: { usuario, respuestas: respuestasGuardadas } });
+      } else {
+        navigate("/cuestionario", { state: { usuario } });
+      }
+
+    } catch (err) {
+      // El error "El código de estudiante no existe" vendrá del backend.
+      setError(err.message || "Ocurrió un error al iniciar sesión.");
+      setLoading(false);
+    }
+  };
 
   return (
     <div
@@ -79,9 +92,9 @@ export default function Login() {
             </svg>
           </div>
           <h2 style={{ fontSize: "1.5rem", fontWeight: "700", color: "#333", marginBottom: "0.5rem" }}>
-            Inicio de sesión
+            Bienvenido
           </h2>
-          <p style={{ color: "#666", fontSize: "0.875rem" }}>Ingresa tu código de estudiante para continuar</p>
+          <p style={{ color: "#666", fontSize: "0.875rem" }}>Ingresa tu código de estudiante para comenzar</p>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -132,9 +145,9 @@ export default function Login() {
               <input
                 type="text"
                 required
-                value={codigo}
-                onChange={(e) => setCodigo(e.target.value)}
-                placeholder="Ingresa tu código"
+                value={codigoEstudiante}
+                onChange={(e) => setCodigoEstudiante(e.target.value)}
+                placeholder="Ej: 000123456"
                 style={{
                   width: "100%",
                   padding: "0.75rem 0.75rem 0.75rem 2.5rem",
@@ -149,79 +162,6 @@ export default function Login() {
               />
             </div>
           </div>
-
-          <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: "0.875rem",
-                fontWeight: "500",
-                color: "#374151",
-                marginBottom: "0.5rem",
-              }}
-            >
-              Contraseña
-            </label>
-            <div style={{ position: "relative" }}>
-              <svg
-                style={{
-                  position: "absolute",
-                  left: "12px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: "#9ca3af",
-                }}
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" stroke="currentColor" strokeWidth="2" />
-                <circle cx="12" cy="16" r="1" stroke="currentColor" strokeWidth="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" strokeWidth="2" />
-              </svg>
-              <input
-                type="password"
-                value={password}
-                autoComplete="off"
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Ingresa tu contraseña"
-                style={{
-                  width: "100%",
-                  padding: "0.75rem 0.75rem 0.75rem 2.5rem",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "8px",
-                  fontSize: "1rem",
-                  transition: "border-color 0.2s",
-                  outline: "none",
-                }}
-                onFocus={(e) => (e.target.style.borderColor = "#0070f3")}
-                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: "100%",
-              padding: "0.75rem",
-              background: loading ? "#9ca3af" : "#0070f3",
-              color: "white",
-              border: "none",
-              borderRadius: "8px",
-              fontSize: "1rem",
-              fontWeight: "600",
-              cursor: loading ? "not-allowed" : "pointer",
-              transition: "background-color 0.2s",
-            }}
-            onMouseOver={(e) => !loading && (e.target.style.background = "#0051cc")}
-            onMouseOut={(e) => !loading && (e.target.style.background = "#0070f3")}
-          >
-            {loading ? "Ingresando..." : "Ingresar"}
-          </button>
 
           {error && (
             <div
@@ -245,8 +185,29 @@ export default function Login() {
               {error}
             </div>
           )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: "100%",
+              padding: "0.75rem",
+              background: loading ? "#9ca3af" : "#0070f3",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              fontSize: "1rem",
+              fontWeight: "600",
+              cursor: loading ? "not-allowed" : "pointer",
+              transition: "background-color 0.2s",
+            }}
+            onMouseOver={(e) => !loading && (e.target.style.background = "#0051cc")}
+            onMouseOut={(e) => !loading && (e.target.style.background = "#0070f3")}
+          >
+            {loading ? "Validando..." : "Ingresar"}
+          </button>
         </form>
       </div>
     </div>
-  )
+  );
 }

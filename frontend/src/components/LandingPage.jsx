@@ -109,86 +109,47 @@ export default function LandingPage() {
             {
               icon: (
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M9 12l2 2 4-4M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c1.04 0 2.04.18 2.97.5"
-                    stroke="#0070f3"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M22 4L12 14.01l-3-3"
-                    stroke="#0070f3"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  <path d="M15.5 3H8.5C7.39543 3 6.5 3.89543 6.5 5V19C6.5 20.1046 7.39543 21 8.5 21H15.5C16.6046 21 17.5 20.1046 17.5 19V5C17.5 3.89543 16.6046 3 15.5 3Z" stroke="#0070f3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M9.5 7H14.5" stroke="#0070f3" strokeWidth="2" strokeLinecap="round"/>
+                  <path d="M9.5 11H14.5" stroke="#0070f3" strokeWidth="2" strokeLinecap="round"/>
+                  <path d="M9.5 15H11.5" stroke="#0070f3" strokeWidth="2" strokeLinecap="round"/>
                 </svg>
               ),
-              title: "Dimensión Cognitiva",
-              desc: "Evalúa tus habilidades de pensamiento y procesamiento",
+              title: "Cuestionario Integral",
+              desc: "Un solo formulario para recoger datos sociodemográficos, académicos y de habilidades.",
             },
             {
               icon: (
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
-                    stroke="#00c896"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <circle
-                    cx="9"
-                    cy="7"
-                    r="4"
-                    stroke="#00c896"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"
-                    stroke="#00c896"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  <path d="M12 2L9 9H2L7 13L5 20L12 16L19 20L17 13L22 9H15L12 2Z" stroke="#00c896" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M12 8C14.2091 8 16 6.20914 16 4C16 1.79086 14.2091 0 12 0C9.79086 0 8 1.79086 8 4C8 6.20914 9.79086 8 12 8Z" transform="translate(0 14)" fill="#00c896"/>
                 </svg>
               ),
-              title: "Educativa/Familiar",
-              desc: "Analiza tu entorno educativo y familiar",
+              title: "Análisis de Inteligencias",
+              desc: "Descubre tus fortalezas según la teoría de las Inteligencias Múltiples.",
             },
             {
               icon: (
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M3 3v18h18" stroke="#0070f3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path
-                    d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"
-                    stroke="#0070f3"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  <path d="M7 14l5-5 3 3 4-4" stroke="#0070f3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               ),
-              title: "Socioeconómico",
-              desc: "Considera factores socioeconómicos relevantes",
+              title: "Resultados Instantáneos",
+              desc: "Visualiza tu inteligencia predominante y puntajes en un dashboard claro.",
             },
             {
               icon: (
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M22 12h-4l-3 9L9 3l-3 9H2"
-                    stroke="#00c896"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  <path d="M12 2L2 7V17L12 22L22 17V7L12 2Z" stroke="#00c896" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M2 7L12 12" stroke="#00c896" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M22 7L12 12" stroke="#00c896" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M12 22V12" stroke="#00c896" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M7 4.5L17 9.5" stroke="#00c896" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               ),
-              title: "Autoeficacia",
-              desc: "Mide tu confianza en tus capacidades",
+              title: "Orientación STEM",
+              desc: "Usa tus resultados para explorar carreras en Ciencia, Tecnología, Ingeniería y Matemáticas.",
             },
           ].map((item, index) => (
             <div
