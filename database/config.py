@@ -74,10 +74,19 @@ def create_sqlalchemy_engine():
                 "driver": DB_DRIVER.strip('{}'), # <-- Cambio aquí
                 "encrypt": "yes",
                 "TrustServerCertificate": "no",
-                "timeout": "30",
+                "timeout": "60",  # Aumentado de 30 a 60 segundos
             },
         )
-        return create_engine(connection_url)
+        # Configuración del engine con pool más robusto
+        return create_engine(
+            connection_url,
+            pool_size=5,          # Tamaño del pool de conexiones
+            max_overflow=10,      # Conexiones adicionales permitidas
+            pool_timeout=30,      # Timeout para obtener conexión del pool
+            pool_recycle=3600,    # Reciclar conexiones cada hora
+            pool_pre_ping=True,   # Verificar conexiones antes de usar
+            echo=False            # No mostrar SQL queries (cambiar a True para debug)
+        )
     except Exception as e:
         print(f"❌ Error al crear el motor de SQLAlchemy: {e}", file=sys.stderr)
         sys.exit(1)

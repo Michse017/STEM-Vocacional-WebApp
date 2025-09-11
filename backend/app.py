@@ -48,9 +48,16 @@ def create_app():
     # en los modelos de SQLAlchemy se creen en la base de datos si no existen.
     # Es seguro ejecutarlo múltiples veces.
     with app.app_context():
-        print("Verificando y/o creando tablas de la base de datos...")
-        Base.metadata.create_all(bind=engine)
-        print("Tablas de la base de datos verificadas/creadas.")
+        try:
+            print("Verificando y/o creando tablas de la base de datos...")
+            Base.metadata.create_all(bind=engine)
+            print("Tablas de la base de datos verificadas/creadas.")
+        except Exception as db_error:
+            print(f"❌ Error al conectar con la base de datos: {db_error}")
+            print("⚠️  La aplicación continuará, pero las funciones de base de datos no estarán disponibles.")
+            print("💡 Verifica la conexión a internet y la configuración de Azure SQL Server.")
+
+    return app
 
     return app
 
@@ -60,7 +67,7 @@ if __name__ == '__main__':
     app = create_app()
     
     # Ejecutamos el servidor de desarrollo de Flask
-    # debug=True activa la recarga automática al guardar cambios.
+    # debug=False para evitar reinicios automáticos que pueden causar problemas de conexión
     # host='0.0.0.0' hace que el servidor sea accesible desde tu red local.
     # port=5000 es el puerto estándar para desarrollo de Flask.
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)
