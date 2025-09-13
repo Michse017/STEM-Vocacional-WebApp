@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://127.0.0.1:5000/api";
+const API_BASE_URL = "https://stem-backend-9sc0.onrender.com/api";
 
 /**
  * Maneja las respuestas de la API, parseando el JSON y manejando errores.
