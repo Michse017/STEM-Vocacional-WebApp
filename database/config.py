@@ -62,19 +62,18 @@ from sqlalchemy import create_engine, URL
 def create_sqlalchemy_engine():
     """Crea el motor de SQLAlchemy de forma segura."""
     try:
-        # Construye la URL de forma segura para evitar problemas de codificación
+        # Construye la URL de forma segura para pymssql (sin drivers ODBC)
         connection_url = URL.create(
-            "mssql+pyodbc",
+            "mssql+pymssql",  # Cambio de pyodbc a pymssql
             username=DB_USER,
             password=get_password(),
             host=DB_SERVER,
             port=DB_PORT,
             database=DB_DATABASE,
             query={
-                "driver": DB_DRIVER.strip('{}'), # <-- Cambio aquí
-                "encrypt": "yes",
-                "TrustServerCertificate": "no",
-                "timeout": "60",  # Aumentado de 30 a 60 segundos
+                "charset": "utf8",
+                "timeout": "60",
+                # Removemos driver ODBC ya que pymssql no lo necesita
             },
         )
         # Configuración del engine con pool más robusto
