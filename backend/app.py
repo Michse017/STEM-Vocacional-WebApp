@@ -26,9 +26,14 @@ def create_app():
     # Configuración de CORS (Cross-Origin Resource Sharing)
     # Configuración dinámica para desarrollo y producción
     if os.environ.get('FLASK_ENV') == 'production':
-        # En producción, permitir el dominio del frontend de Vercel
-        frontend_url = os.environ.get('FRONTEND_URL', 'https://stem-vocacional-webapp.vercel.app')
-        CORS(app, resources={r"/api/*": {"origins": [frontend_url, "http://localhost:3000"]}}, supports_credentials=True)
+        # En producción, permitir múltiples dominios de Vercel
+        allowed_origins = [
+            os.environ.get('FRONTEND_URL', 'https://stem-vocacional-webapp.vercel.app'),
+            'https://stem-vocacional-web-app.vercel.app',  # Nuevo dominio
+            'https://estem-iota.vercel.app',  # Dominio anterior
+            "http://localhost:3000"
+        ]
+        CORS(app, resources={r"/api/*": {"origins": allowed_origins}}, supports_credentials=True)
     else:
         # En desarrollo, permitir localhost
         CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
