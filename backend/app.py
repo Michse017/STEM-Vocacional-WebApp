@@ -24,9 +24,14 @@ def create_app():
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_super_secret_key_change_for_prod')
 
     # Configuración de CORS (Cross-Origin Resource Sharing)
-    # Esto es VITAL para permitir que tu frontend (ej. en localhost:3000)
-    # se comunique con tu backend (ej. en localhost:5000).
-    CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
+    # Configuración dinámica para desarrollo y producción
+    if os.environ.get('FLASK_ENV') == 'production':
+        # En producción, permitir el dominio del frontend de Vercel
+        frontend_url = os.environ.get('FRONTEND_URL', 'https://stem-vocacional-webapp.vercel.app')
+        CORS(app, resources={r"/api/*": {"origins": [frontend_url, "http://localhost:3000"]}}, supports_credentials=True)
+    else:
+        # En desarrollo, permitir localhost
+        CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
 
     # 3. Registro de Blueprints
     # Aquí le decimos a Flask que use los archivos de rutas que creamos.
@@ -34,13 +39,24 @@ def create_app():
     app.register_blueprint(usuario_bp, url_prefix='/api')
     app.register_blueprint(questionnaire_bp, url_prefix='/api')
 
-    # 4. Ruta de Verificación de Salud (Health Check)
+    # 4. Ruta raíz para verificar que el servidor está activo
+    @app.route('/')
+    def home():
+        return jsonify({
+            "message": "STEM-Vocacional Backend API",
+            "status": "running",
+            "environment": os.environ.get('FLASK_ENV', 'development'),
+            "endpoints": ["/api/health", "/api/usuarios", "/api/questionnaire"]
+        })
+
+    # 5. Ruta de Verificación de Salud (Health Check)
     # Es una buena práctica tener un endpoint simple para saber si la API está viva.
     @app.route('/api/health')
     def health_check():
         return jsonify({
             "status": "ok",
-            "message": "API del servicio STEM-Vocacional está funcionando."
+            "message": "API del servicio STEM-Vocacional está funcionando.",
+            "environment": os.environ.get('FLASK_ENV', 'development')
         }), 200
 
     # 5. Creación de las tablas de la base de datos
