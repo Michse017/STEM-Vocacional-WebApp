@@ -1,7 +1,8 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, Dict
-from datetime import date
+from datetime import date, timedelta
 from enum import Enum
+import re
 
 # --- Enums para Opciones de Respuesta ---
 # Usar Enums hace el código más legible, seguro y autodescriptivo.
@@ -29,16 +30,10 @@ class OcupacionEnum(str, Enum):
     ama_de_casa = "Ama de casa"
     otro = "Otro"
 
-class MiembrosHogarEnum(str, Enum):
-    dos_tres = "2-3"
-    cuatro_cinco = "4-5"
-    seis_o_mas = "6 o más"
-
-class NumeroHermanosEnum(str, Enum):
-    ninguno = "Ninguno"
-    uno = "1"
-    dos_tres = "2-3"
-    cuatro_o_mas = "4 o más"
+"""
+Se eliminan los enums de miembros de hogar y número de hermanos en favor de enteros (según DDL).
+Seguiremos aceptando cadenas comunes ("Ninguno", "2-3", "6 o más") y las convertiremos a enteros.
+"""
 
 class CondicionDiscapacidadEnum(str, Enum):
     ninguna = "Ninguna"
@@ -88,8 +83,8 @@ class SociodemograficaSchema(BaseModel):
     nivel_educativo_padre: Optional[NivelEducativoEnum] = None
     ocupacion_padre: Optional[OcupacionEnum] = None
     ocupacion_madre: Optional[OcupacionEnum] = None
-    miembros_hogar: Optional[MiembrosHogarEnum] = None
-    numero_hermanos: Optional[NumeroHermanosEnum] = None
+    miembros_hogar: Optional[int] = None
+    numero_hermanos: Optional[int] = None
 
     # Condiciones especiales
     condicion_discapacidad: Optional[CondicionDiscapacidadEnum] = None
@@ -98,19 +93,100 @@ class SociodemograficaSchema(BaseModel):
     otro_grupo_etnico: Optional[str] = Field(None, max_length=100)
     condicion_vulnerabilidad: Optional[CondicionVulnerabilidadEnum] = None
 
-    # Trabajo y Estudio
+    # Trabajo actual
     trabaja_actualmente: Optional[TrabajoActualEnum] = None
 
-    # Dimensiones académicas (Pruebas Saber 11)
+    # ICFES / Saber 11
     puntaje_global_saber11: Optional[int] = Field(None, ge=0, le=500)
     puntaje_lectura_critica: Optional[int] = Field(None, ge=0, le=100)
     puntaje_matematicas: Optional[int] = Field(None, ge=0, le=100)
-    puntaje_ingles: Optional[int] = Field(None, ge=0, le=100)
-    puntaje_competencias_ciudadanas: Optional[int] = Field(None, ge=0, le=100)
+    puntaje_sociales_ciudadanas: Optional[int] = Field(None, ge=0, le=100)
     puntaje_ciencias_naturales: Optional[int] = Field(None, ge=0, le=100)
+    puntaje_ingles: Optional[int] = Field(None, ge=0, le=100)
 
     class Config:
         from_attributes = True
+
+    # --- Validadores ---
+    @field_validator('fecha_nacimiento', 'fecha_graduacion_bachillerato')
+    @classmethod
+    def no_futuras(cls, v: Optional[date]):
+        if v and v > date.today():
+            raise ValueError('La fecha no puede ser posterior a hoy')
+        return v
+
+    @model_validator(mode='after')
+    def valida_relaciones_fechas_y_icfes(self):
+        # Reglas de fechas: grad >= nacimiento + 14 años
+        if self.fecha_nacimiento and self.fecha_graduacion_bachillerato:
+            try:
+                # Aproximamos 14 años como 14*365 días (suficiente para validación)
+                min_grad = self.fecha_nacimiento + timedelta(days=14*365)
+                if self.fecha_graduacion_bachillerato < min_grad:
+                    raise ValueError('La fecha de graduación debe ser al menos 14 años posterior a la fecha de nacimiento')
+            except Exception:
+                raise ValueError('Fechas inválidas')
+
+        # Cálculo del puntaje global si se tienen todos los componentes
+        comp = [
+            self.puntaje_lectura_critica,
+            self.puntaje_matematicas,
+            self.puntaje_sociales_ciudadanas,
+            self.puntaje_ciencias_naturales,
+            self.puntaje_ingles,
+        ]
+        if all(v is not None for v in comp):
+            ponderado = (3*(self.puntaje_lectura_critica + self.puntaje_matematicas + self.puntaje_sociales_ciudadanas + self.puntaje_ciencias_naturales) + 1*self.puntaje_ingles)
+            indice_global = ponderado / 13
+            calculado = int(round(indice_global * 5))
+            # Si el usuario envía un valor distinto, lo ajustamos al correcto
+            object.__setattr__(self, 'puntaje_global_saber11', calculado)
+        return self
+
+    @field_validator('trabaja_actualmente', mode='before')
+    @classmethod
+    def normaliza_trabajo_actual(cls, v):
+        if v is None:
+            return v
+        if isinstance(v, TrabajoActualEnum):
+            return v
+        if isinstance(v, str):
+            t = v.strip().lower()
+            # tolerar acentos/variantes
+            t = t.replace('sí', 'si')
+            mapping = {
+                'si, tiempo parcial': TrabajoActualEnum.si_parcial,
+                'si, tiempo completo': TrabajoActualEnum.si_completo,
+                'no': TrabajoActualEnum.no,
+            }
+            return mapping.get(t, v)
+        return v
+
+    @field_validator('miembros_hogar', 'numero_hermanos', mode='before')
+    @classmethod
+    def parse_enteros_flexibles(cls, v):
+        if v is None:
+            return v
+        if isinstance(v, int):
+            return v
+        if isinstance(v, str):
+            txt = v.strip().lower()
+            if txt in ['ninguno', '0']:
+                return 0
+            # Rango como "2-3" -> tomamos el máximo del rango
+            m = re.match(r'^(\d+)\s*[-–]\s*(\d+)$', txt)
+            if m:
+                a, b = int(m.group(1)), int(m.group(2))
+                return max(a, b)
+            # "6 o más", "4 o más"
+            m2 = re.match(r'^(\d+)\s*o\s*m[aá]s$', txt)
+            if m2:
+                return int(m2.group(1))
+            # dígito simple
+            if txt.isdigit():
+                return int(txt)
+        # Si no se puede interpretar, lo dejamos como None para no bloquear guardado parcial
+        return None
 
 class InteligenciasMultiplesSchema(BaseModel):
     """

@@ -134,6 +134,7 @@ export const preguntasInteligencias = [
   { id: "pregunta_33", texto: "33.- Reconozco mis estados de ánimo, no me cuesta identificarlos." },
   { id: "pregunta_34", texto: "34.- Me doy cuenta de los estados de ánimo de las personas con quienes me encuentro." },
   { id: "pregunta_35", texto: "35.- Me doy cuenta bastante bien de lo que los otros piensan de mí." },
+  // El cuestionario oficial tiene 35 preguntas
 ]
 
 export const secciones = [
@@ -209,8 +210,8 @@ export const secciones = [
       { id: "puntaje_matematicas", texto: "Puntaje Matemáticas (0-100)", tipo: "number", min: 0, max: 100 },
       { id: "puntaje_ingles", texto: "Puntaje Inglés (0-100)", tipo: "number", min: 0, max: 100 },
       {
-        id: "puntaje_competencias_ciudadanas",
-        texto: "Puntaje Competencias Ciudadanas (0-100)",
+        id: "puntaje_sociales_ciudadanas",
+        texto: "Puntaje Sociales y Ciudadanas (0-100)",
         tipo: "number",
         min: 0,
         max: 100,

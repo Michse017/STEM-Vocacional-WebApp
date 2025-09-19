@@ -9,7 +9,6 @@ def validar_usuario_por_codigo(db_session: Session, codigo_estudiante: str) -> U
     """
     usuario = get_usuario_by_codigo(db_session, codigo_estudiante)
     if not usuario:
-        # Ya no se crea un usuario, se lanza un error.
         raise ValueError("El código de estudiante no existe.")
     return usuario
 
