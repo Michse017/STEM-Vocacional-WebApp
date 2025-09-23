@@ -3,8 +3,14 @@
 ## ✅ Estado del Despliegue
 
 **Fecha:** 23 de septiembre, 2025  
-**Estado:** ✅ DESPLEGADO EXITOSAMENTE  
+**Estado:** ✅ DESPLEGADO EXITOSAMENTE (con corrección SQL Server)  
 **Repositorio:** https://github.com/BRNDLD/STEM-Vocacional-WebApp  
+**Última corrección:** Problema de cascada en SQL Server resuelto
+
+### 🔧 Corrección Aplicada
+- **Problema:** SQL Server no permite múltiples rutas de cascada (ON DELETE CASCADE)
+- **Solución:** Removido CASCADE de `id_pregunta` en tabla `respuestas_usuario`
+- **Estado:** ✅ Corregido y desplegado  
 
 ---
 
@@ -76,8 +82,9 @@
 3. `frontend/src/components/AdminCuestionarios.jsx` - Interfaz de administración
 
 ### Base de Datos
-4. `database/create_tables.py` - Script de migración
-5. `database/models.py` - Modelos actualizados con 5 nuevas tablas
+4. `database/create_tables.py` - Script de migración original
+5. `database/create_tables_sqlserver.py` - Script optimizado para SQL Server
+6. `database/models.py` - Modelos actualizados con 5 nuevas tablas
 
 ### Documentación
 6. `ADMIN_CUESTIONARIOS_README.md` - Documentación completa del sistema
@@ -139,6 +146,7 @@
 - La interfaz detecta automáticamente si está en **modo desarrollo o producción**
 - Todas las operaciones incluyen **manejo de errores** robusto
 - El sistema es **completamente dinámico** - no requiere cambios de código para nuevos cuestionarios
+- **SQL Server:** Optimizado para evitar problemas de cascada múltiple en restricciones de clave foránea
 
 ---
 
