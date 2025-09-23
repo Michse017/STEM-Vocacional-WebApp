@@ -21,8 +21,14 @@ from backend.routes.questionnaire_routes import questionnaire_bp
 try:
     from backend.routes.admin_cuestionarios_routes import admin_cuestionarios_bp
     ADMIN_ROUTES_AVAILABLE = True
-except ImportError:
-    print("⚠️  Rutas de administración no disponibles")
+    print("✅ admin_cuestionarios_routes importado exitosamente")
+except ImportError as import_error:
+    print(f"⚠️  ERROR importando rutas de administración: {import_error}")
+    ADMIN_ROUTES_AVAILABLE = False
+except Exception as e:
+    print(f"❌ ERROR crítico importando rutas de administración: {e}")
+    import traceback
+    print(f"Traceback: {traceback.format_exc()}")
     ADMIN_ROUTES_AVAILABLE = False
 
 def create_app():
@@ -71,10 +77,21 @@ def create_app():
 
     # Registrar rutas de administración solo si están disponibles
     if ADMIN_ROUTES_AVAILABLE:
-        app.register_blueprint(admin_cuestionarios_bp, url_prefix='/api/admin')
-        print("✅ Rutas de administración registradas")
+        try:
+            app.register_blueprint(admin_cuestionarios_bp, url_prefix='/api/admin')
+            print("✅ Blueprint admin_cuestionarios registrado exitosamente en /api/admin")
+            
+            # Verificar rutas registradas
+            admin_routes = [rule.rule for rule in app.url_map.iter_rules() if '/admin/' in rule.rule]
+            print(f"✅ Se registraron {len(admin_routes)} rutas de admin:")
+            for route in admin_routes[:3]:  # Mostrar las primeras 3
+                print(f"  - {route}")
+        except Exception as e:
+            print(f"❌ ERROR registrando blueprint de admin: {e}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
     else:
-        print("⚠️  Rutas de administración no registradas")
+        print("⚠️  Rutas de administración no registradas - ADMIN_ROUTES_AVAILABLE = False")
 
     @app.route('/')
     def home():
