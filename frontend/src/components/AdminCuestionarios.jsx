@@ -129,6 +129,14 @@ const AdminCuestionarios = () => {
             
             const method = modoEdicion ? 'PUT' : 'POST';
             
+            // DEBUG: Verificar estado antes de crear payload
+            console.log('=== DEBUG FRONTEND ===');
+            console.log('preguntasFormulario estado actual:', preguntasFormulario);
+            console.log('Número de preguntas en formulario:', preguntasFormulario.length);
+            preguntasFormulario.forEach((pregunta, index) => {
+                console.log(`Pregunta ${index + 1}:`, pregunta);
+            });
+            
             // Incluir preguntas en el payload
             const payload = {
                 ...formulario,
@@ -140,6 +148,10 @@ const AdminCuestionarios = () => {
                     opciones: pregunta.opciones || []
                 }))
             };
+            
+            console.log('Payload completo a enviar:', payload);
+            console.log('Preguntas en payload:', payload.preguntas);
+            console.log('Número de preguntas a enviar:', payload.preguntas.length);
             
             const response = await fetch(url, {
                 method: method,
@@ -231,22 +243,47 @@ const AdminCuestionarios = () => {
     };
 
     const agregarPreguntaAlFormulario = () => {
+        console.log('=== AGREGANDO PREGUNTA AL FORMULARIO ===');
+        console.log('nuevaPregunta actual:', nuevaPregunta);
+        console.log('preguntasFormulario antes de agregar:', preguntasFormulario);
+        
         if (nuevaPregunta.texto_pregunta.trim()) {
-            setPreguntasFormulario(prev => [...prev, {
+            const preguntaAAgregar = {
                 ...nuevaPregunta,
                 id_temporal: Date.now() // ID temporal para React key
-            }]);
+            };
+            
+            console.log('Pregunta que se va a agregar:', preguntaAAgregar);
+            
+            setPreguntasFormulario(prev => {
+                const nuevaLista = [...prev, preguntaAAgregar];
+                console.log('Nueva lista de preguntas después de agregar:', nuevaLista);
+                return nuevaLista;
+            });
+            
             setNuevaPregunta({
                 texto_pregunta: '',
                 tipo_pregunta: 'text',
                 requerida: false,
                 opciones: []
             });
+            
+            console.log('Pregunta agregada exitosamente');
+        } else {
+            console.log('ERROR: No se puede agregar pregunta vacía');
         }
     };
 
     const eliminarPreguntaDelFormulario = (idTemporal) => {
-        setPreguntasFormulario(prev => prev.filter(p => p.id_temporal !== idTemporal));
+        console.log('=== ELIMINANDO PREGUNTA DEL FORMULARIO ===');
+        console.log('ID temporal a eliminar:', idTemporal);
+        console.log('preguntasFormulario antes de eliminar:', preguntasFormulario);
+        
+        setPreguntasFormulario(prev => {
+            const nuevaLista = prev.filter(p => p.id_temporal !== idTemporal);
+            console.log('Nueva lista de preguntas después de eliminar:', nuevaLista);
+            return nuevaLista;
+        });
     };
 
     if (loading) {

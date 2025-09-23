@@ -86,13 +86,30 @@ def crear_cuestionario(db_session):
     """Crea un nuevo cuestionario con preguntas opcionales."""
     try:
         data = request.get_json()
-        logger.info(f"Creando cuestionario con datos: {data}")
+        logger.info(f"=== DEBUG BACKEND ===")
+        logger.info(f"Datos completos recibidos: {data}")
+        logger.info(f"Tipo de datos: {type(data)}")
         
         # Validar datos requeridos
         if not data or not data.get('nombre'):
+            logger.error("Error: Nombre del cuestionario faltante")
             return jsonify({'success': False, 'error': 'El nombre del cuestionario es requerido'}), 400
         
+        # DEBUG: Verificar preguntas recibidas
+        preguntas_data = data.get('preguntas', [])
+        logger.info(f"Preguntas en payload: {preguntas_data}")
+        logger.info(f"Número de preguntas recibidas: {len(preguntas_data)}")
+        logger.info(f"Tipo de preguntas: {type(preguntas_data)}")
+        
+        if preguntas_data:
+            for i, pregunta in enumerate(preguntas_data):
+                logger.info(f"Pregunta {i+1} recibida: {pregunta}")
+                logger.info(f"Tipo pregunta {i+1}: {type(pregunta)}")
+        else:
+            logger.warning("No se recibieron preguntas en el payload")
+        
         # Crear cuestionario
+        logger.info("Iniciando creación del cuestionario...")
         cuestionario_service = CuestionarioService(db_session)
         cuestionario = cuestionario_service.crear_cuestionario(
             nombre=data['nombre'],
@@ -104,24 +121,43 @@ def crear_cuestionario(db_session):
         
         # Crear preguntas si las hay
         preguntas_creadas = []
-        preguntas_data = data.get('preguntas', [])
         logger.info(f"Procesando {len(preguntas_data)} preguntas")
         
         if preguntas_data:
+            logger.info("Entrando al bloque de procesamiento de preguntas...")
             pregunta_service = PreguntaService(db_session)
             
             for i, pregunta_data in enumerate(preguntas_data):
                 try:
-                    logger.info(f"Creando pregunta {i+1}: {pregunta_data}")
+                    logger.info(f"=== PROCESANDO PREGUNTA {i+1} ===")
+                    logger.info(f"Datos pregunta {i+1}: {pregunta_data}")
+                    logger.info(f"Tipo datos pregunta: {type(pregunta_data)}")
+                    
+                    # Verificar campos requeridos
+                    texto_pregunta = pregunta_data.get('texto_pregunta')
+                    tipo_pregunta = pregunta_data.get('tipo_pregunta')
+                    
+                    logger.info(f"texto_pregunta: '{texto_pregunta}'")
+                    logger.info(f"tipo_pregunta: '{tipo_pregunta}'")
+                    
+                    if not texto_pregunta:
+                        logger.error(f"ERROR: texto_pregunta vacío en pregunta {i+1}")
+                        raise ValueError(f"texto_pregunta es requerido para pregunta {i+1}")
+                    
+                    if not tipo_pregunta:
+                        logger.error(f"ERROR: tipo_pregunta vacío en pregunta {i+1}")
+                        raise ValueError(f"tipo_pregunta es requerido para pregunta {i+1}")
+                    
+                    logger.info(f"Llamando a crear_pregunta para pregunta {i+1}...")
                     pregunta = pregunta_service.crear_pregunta(
                         id_cuestionario=cuestionario.id_cuestionario,
-                        texto=pregunta_data['texto_pregunta'],
-                        tipo_pregunta=pregunta_data['tipo_pregunta'],
+                        texto=texto_pregunta,
+                        tipo_pregunta=tipo_pregunta,
                         requerida=pregunta_data.get('requerida', True),
                         orden=pregunta_data.get('orden', i + 1),
                         auto_commit=False  # No hacer commit hasta el final
                     )
-                    logger.info(f"Pregunta creada con ID: {pregunta.id_pregunta}")
+                    logger.info(f"Pregunta {i+1} creada exitosamente con ID: {pregunta.id_pregunta}")
                     
                     # Crear opciones si las hay
                     opciones_creadas = []
@@ -130,7 +166,7 @@ def crear_cuestionario(db_session):
                     
                     for j, opcion_data in enumerate(opciones_data):
                         try:
-                            logger.info(f"Creando opción {j+1}: {opcion_data}")
+                            logger.info(f"Creando opción {j+1} para pregunta {pregunta.id_pregunta}: {opcion_data}")
                             opcion = pregunta_service.crear_opcion_pregunta(
                                 id_pregunta=pregunta.id_pregunta,
                                 texto=opcion_data['texto_opcion'],
@@ -143,9 +179,11 @@ def crear_cuestionario(db_session):
                                 'texto_opcion': opcion.texto,
                                 'valor': opcion.valor
                             })
-                            logger.info(f"Opción creada con ID: {opcion.id_opcion}")
+                            logger.info(f"Opción {j+1} creada con ID: {opcion.id_opcion}")
                         except Exception as opcion_error:
-                            logger.error(f"Error al crear opción {j+1}: {str(opcion_error)}")
+                            logger.error(f"ERROR al crear opción {j+1} para pregunta {pregunta.id_pregunta}: {str(opcion_error)}")
+                            import traceback
+                            logger.error(f"Traceback opción: {traceback.format_exc()}")
                             raise opcion_error
                     
                     preguntas_creadas.append({
@@ -156,32 +194,42 @@ def crear_cuestionario(db_session):
                         'orden': pregunta.orden,
                         'opciones': opciones_creadas
                     })
+                    logger.info(f"Pregunta {i+1} completamente procesada")
                     
                 except Exception as pregunta_error:
-                    logger.error(f"Error al crear pregunta {i+1}: {str(pregunta_error)}")
+                    logger.error(f"ERROR CRÍTICO al procesar pregunta {i+1}: {str(pregunta_error)}")
+                    import traceback
+                    logger.error(f"Traceback pregunta {i+1}: {traceback.format_exc()}")
                     raise pregunta_error
             
             # Hacer commit de todas las preguntas y opciones de una vez
             try:
+                logger.info(f"Intentando hacer commit de {len(preguntas_creadas)} preguntas...")
                 db_session.commit()
-                logger.info(f"Commit exitoso de {len(preguntas_creadas)} preguntas")
+                logger.info(f"COMMIT EXITOSO de cuestionario y {len(preguntas_creadas)} preguntas")
             except Exception as commit_error:
-                logger.error(f"Error en commit de preguntas: {str(commit_error)}")
+                logger.error(f"ERROR CRÍTICO EN COMMIT: {str(commit_error)}")
+                import traceback
+                logger.error(f"Traceback commit: {traceback.format_exc()}")
+                logger.info("Haciendo rollback...")
                 db_session.rollback()
                 raise commit_error
         else:
             # Si no hay preguntas, hacer commit solo del cuestionario
             try:
+                logger.info("No hay preguntas, haciendo commit solo del cuestionario...")
                 db_session.commit()
-                logger.info(f"Commit exitoso del cuestionario sin preguntas")
+                logger.info("Commit exitoso del cuestionario sin preguntas")
             except Exception as commit_error:
-                logger.error(f"Error en commit de cuestionario: {str(commit_error)}")
+                logger.error(f"ERROR en commit de cuestionario sin preguntas: {str(commit_error)}")
+                import traceback
+                logger.error(f"Traceback commit cuestionario: {traceback.format_exc()}")
                 db_session.rollback()
                 raise commit_error
         
         logger.info(f"Cuestionario completado con {len(preguntas_creadas)} preguntas creadas")
         
-        return jsonify({
+        response_data = {
             'success': True,
             'data': {
                 'id_cuestionario': cuestionario.id_cuestionario,
@@ -191,7 +239,10 @@ def crear_cuestionario(db_session):
                 'total_preguntas': len(preguntas_creadas),
                 'preguntas': preguntas_creadas
             }
-        }), 201
+        }
+        
+        logger.info(f"Enviando respuesta final: {response_data}")
+        return jsonify(response_data), 201
         
     except Exception as e:
         logger.error(f"Error al crear cuestionario: {str(e)}")
