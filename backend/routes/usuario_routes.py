@@ -3,7 +3,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from backend.services.usuario_service import validar_usuario_por_codigo, obtener_respuestas_guardadas
-from database.controller import SessionLocal
+from database.controller import SessionLocal, is_database_available
 import traceback
 
 usuario_bp = Blueprint('usuario_bp', __name__)
@@ -14,6 +14,13 @@ def login_usuario():
     Valida a un usuario por su código. Si no existe, lo crea.
     Devuelve los datos del usuario.
     """
+    if not is_database_available():
+        return jsonify({
+            "error": "Servicio temporalmente no disponible",
+            "message": "La base de datos no está disponible. Por favor, intenta más tarde.",
+            "database_status": "unavailable"
+        }), 503
+    
     db_session = SessionLocal()
     try:
         data = request.get_json()
@@ -30,6 +37,8 @@ def login_usuario():
         }), 200
     except ValueError as e:
         return jsonify({"error": str(e)}), 404
+    except RuntimeError as e:
+        return jsonify({"error": str(e), "database_status": "unavailable"}), 503
     except Exception as e:
         return jsonify({"error": f"Error interno del servidor: {str(e)}"}), 500
     finally:
@@ -40,6 +49,13 @@ def get_respuestas_usuario(id_usuario: int):
     """
     Endpoint para obtener las respuestas guardadas de un usuario.
     """
+    if not is_database_available():
+        return jsonify({
+            "error": "Servicio temporalmente no disponible",
+            "message": "La base de datos no está disponible. Por favor, intenta más tarde.",
+            "database_status": "unavailable"
+        }), 503
+    
     db_session = SessionLocal()
     try:
         respuestas = obtener_respuestas_guardadas(db_session, id_usuario)

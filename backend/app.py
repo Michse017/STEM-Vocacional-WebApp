@@ -6,7 +6,7 @@ from flask_cors import CORS
 # Agregar el directorio padre al path para poder importar database
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database.controller import engine
+from database.controller import engine, is_database_available, create_all_tables
 from database.models import Base
 
 # --- Importación de Rutas (Blueprints) ---
@@ -62,30 +62,86 @@ def create_app():
 
     @app.route('/')
     def home():
+        db_status = "available" if is_database_available() else "unavailable"
         return jsonify({
             "message": "STEM-Vocacional Backend API",
             "status": "running",
             "environment": os.environ.get('FLASK_ENV', 'development'),
-            "endpoints": ["/api/health", "/api/usuarios", "/api/questionnaire"],
+            "database_status": db_status,
+            "endpoints": {
+                "health": "/api/health",
+                "database_status": "/api/database/status", 
+                "usuarios": "/api/usuarios",
+                "questionnaire": "/api/questionnaire",
+                "admin": "/api/admin/cuestionarios" if ADMIN_ROUTES_AVAILABLE else "unavailable"
+            },
+            "troubleshooting": {
+                "database_unavailable": "Si la base de datos no está disponible, verifica las variables de entorno y el estado de Azure SQL Database",
+                "documentation": "Ver DEPLOY_TROUBLESHOOTING.md para más información"
+            }
         })
 
     @app.route('/api/health')
     def health_check():
+        db_status = "available" if is_database_available() else "unavailable"
+        status_code = 200 if is_database_available() else 503
+        
         return jsonify({
             "status": "ok",
             "message": "API del servicio STEM-Vocacional está funcionando.",
             "environment": os.environ.get('FLASK_ENV', 'development'),
-        }), 200
+            "database_status": db_status,
+            "database_message": "Conexión a Azure SQL disponible" if is_database_available() else "Base de datos no disponible - verifica configuración",
+        }), status_code
+        
+    @app.route('/api/database/status')
+    def database_status():
+        """Endpoint específico para verificar el estado de la base de datos."""
+        if is_database_available():
+            return jsonify({
+                "status": "available",
+                "message": "Conexión a Azure SQL disponible",
+                "server": os.getenv("DB_SERVER", "No configurado"),
+                "database": os.getenv("DB_DATABASE", "No configurado"),
+                "user": os.getenv("DB_USER", "No configurado"),
+            }), 200
+        else:
+            return jsonify({
+                "status": "unavailable",
+                "message": "Base de datos no disponible",
+                "troubleshooting": {
+                    "check_env_vars": [
+                        "DB_SERVER",
+                        "DB_DATABASE", 
+                        "DB_USER",
+                        "DB_PASSWORD"
+                    ],
+                    "common_issues": [
+                        "Azure SQL Database pausada",
+                        "Problemas de conectividad de red",
+                        "Variables de entorno no configuradas",
+                        "Credenciales incorrectas"
+                    ],
+                    "azure_sql_message": "La base de datos Azure SQL puede estar pausada o no disponible temporalmente"
+                }
+            }), 503
 
     with app.app_context():
-        try:
-            print("Verificando y/o creando tablas de la base de datos...")
-            Base.metadata.create_all(bind=engine)
-            print("Tablas de la base de datos verificadas/creadas.")
-        except Exception as db_error:
-            print(f" Error al conectar con la base de datos: {db_error}")
-            print("  La aplicación continuará, pero las funciones de base de datos no estarán disponibles.")
-            print(" Verifica la conexión a internet y la configuración de Azure SQL Server.")
+        if is_database_available():
+            try:
+                print("Verificando y/o creando tablas de la base de datos...")
+                success = create_all_tables()
+                if success:
+                    print("✅ Tablas de la base de datos verificadas/creadas.")
+                else:
+                    print("⚠️ Problemas creando tablas, pero la aplicación continuará.")
+            except Exception as db_error:
+                print(f"❌ Error al conectar con la base de datos: {db_error}")
+                print("⚠️ La aplicación continuará, pero las funciones de base de datos no estarán disponibles.")
+                print("🔧 Verifica la conexión a internet y la configuración de Azure SQL Server.")
+        else:
+            print("⚠️ Base de datos no disponible - La aplicación funcionará en modo sin conexión.")
+            print("🔧 Verifica la configuración de Azure SQL Server y las variables de entorno.")
 
     return app
 

@@ -9,6 +9,36 @@ from sqlalchemy.inspection import inspect as sa_inspect
 
 # --- Funciones de Gestión de la Base de Datos ---
 
+def is_database_available():
+    """Verifica si la base de datos está disponible."""
+    return engine is not None and SessionLocal is not None
+
+def create_all_tables():
+    """
+    Crea todas las tablas definidas en los modelos (models.py) si no existen.
+    Es seguro ejecutar esta función incluso si las tablas ya están creadas en la BD.
+    Útil para inicializar entornos de desarrollo o pruebas.
+    """
+    if not is_database_available():
+        print("⚠️ No se pueden crear tablas - base de datos no disponible")
+        return False
+    
+    try:
+        Base.metadata.create_all(engine)
+        return True
+    except Exception as e:
+        print(f"❌ Error creando tablas: {e}")
+        return Falseport create_engine, inspect
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.exc import IntegrityError, DataError
+from datetime import datetime
+
+from .config import engine, SessionLocal
+from .models import Base, Usuario, RespSociodemografica, RespInteligenciasMultiples
+from sqlalchemy.inspection import inspect as sa_inspect
+
+# --- Funciones de Gestión de la Base de Datos ---
+
 def create_all_tables():
     """
     Crea todas las tablas definidas en los modelos (models.py) si no existen.

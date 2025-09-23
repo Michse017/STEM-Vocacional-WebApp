@@ -3,6 +3,7 @@ import getpass
 import sys
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+import time
 
 DB_SERVER = os.getenv("DB_SERVER", "stemdb.database.windows.net")
 DB_DATABASE = os.getenv("DB_DATABASE", "StemDB")
@@ -50,37 +51,72 @@ def get_database_url(interactive=False):
     )
 
 from sqlalchemy import create_engine, URL
+import time
 
 def create_sqlalchemy_engine():
-    """Crea el motor de SQLAlchemy (pymssql)."""
-    try:
-        connection_url = URL.create(
-            "mssql+pymssql",
-            username=DB_USER,
-            password=get_password(),
-            host=DB_SERVER,
-            port=DB_PORT,
-            database=DB_DATABASE,
-            query={
-                "charset": "utf8",
-                "timeout": "60",
-            },
-        )
-        return create_engine(
-            connection_url,
-            pool_size=5,
-            max_overflow=10,
-            pool_timeout=30,
-            pool_recycle=3600,
-            pool_pre_ping=True,
-            echo=False,
-        )
-    except Exception as e:
-        print(f"❌ Error al crear el motor de SQLAlchemy: {e}", file=sys.stderr)
-        sys.exit(1)
+    """Crea el motor de SQLAlchemy (pymssql) con reintentos."""
+    max_retries = 3
+    retry_delay = 5  # segundos
+    
+    for attempt in range(max_retries):
+        try:
+            print(f"Intentando conectar a Azure SQL (intento {attempt + 1}/{max_retries})...")
+            
+            connection_url = URL.create(
+                "mssql+pymssql",
+                username=DB_USER,
+                password=get_password(),
+                host=DB_SERVER,
+                port=DB_PORT,
+                database=DB_DATABASE,
+                query={
+                    "charset": "utf8",
+                    "timeout": "60",
+                    "login_timeout": "60",
+                },
+            )
+            
+            engine = create_engine(
+                connection_url,
+                pool_size=5,
+                max_overflow=10,
+                pool_timeout=60,
+                pool_recycle=3600,
+                pool_pre_ping=True,
+                echo=False,
+                connect_args={
+                    "timeout": 60,
+                    "login_timeout": 60,
+                }
+            )
+            
+            # Probar la conexión
+            with engine.connect() as conn:
+                result = conn.execute(text("SELECT 1")).fetchone()
+                print(f"✅ Conexión exitosa a Azure SQL Server")
+                return engine
+                
+        except Exception as e:
+            print(f"❌ Error en intento {attempt + 1}: {e}")
+            if attempt < max_retries - 1:
+                print(f"🔄 Reintentando en {retry_delay} segundos...")
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Backoff exponencial
+            else:
+                print(f"❌ Error final al crear el motor de SQLAlchemy después de {max_retries} intentos")
+                # En lugar de exit, devolver None para permitir que la app continúe
+                print("⚠️ La aplicación continuará sin conexión a base de datos")
+                return None
 
 engine = create_sqlalchemy_engine()
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Solo crear SessionLocal si el engine está disponible
+if engine is not None:
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    print("✅ Conexión a base de datos disponible")
+else:
+    SessionLocal = None
+    print("⚠️ Base de datos no disponible - modo sin conexión")
 
 
 def get_connection_string_for_test():
