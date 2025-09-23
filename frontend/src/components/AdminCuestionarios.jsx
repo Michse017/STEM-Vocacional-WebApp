@@ -20,10 +20,10 @@ const AdminCuestionarios = () => {
     // Determinar la URL base según el entorno
     const getBaseUrl = () => {
         if (process.env.NODE_ENV === 'development') {
-            return 'http://localhost:5000';
+            return 'http://localhost:5000/api';
         }
         // En producción, usar la URL completa del backend en Render
-        return 'https://stem-backend-9sc0.onrender.com';
+        return 'https://stem-backend-9sc0.onrender.com/api';
     };
 
     // Cargar cuestionarios al montar el componente
