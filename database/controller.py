@@ -28,10 +28,7 @@ def create_all_tables():
         return True
     except Exception as e:
         print(f"❌ Error creando tablas: {e}")
-        return Falseport create_engine, inspect
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy.exc import IntegrityError, DataError
-from datetime import datetime
+        return False
 
 from .config import engine, SessionLocal
 from .models import Base, Usuario, RespSociodemografica, RespInteligenciasMultiples
