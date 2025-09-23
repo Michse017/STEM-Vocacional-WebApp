@@ -28,6 +28,7 @@ def create_app():
 
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_super_secret_key_change_for_prod')
 
+    # Configurar CORS
     if os.environ.get('FLASK_ENV') == 'production':
         allowed_origins = [
             os.environ.get('FRONTEND_URL', 'https://stem-vocacional-webapp.vercel.app'),
@@ -38,8 +39,10 @@ def create_app():
             "https://localhost:3000",
         ]
         CORS(app, resources={r"/api/*": {"origins": allowed_origins}}, supports_credentials=True)
+        CORS(app, resources={r"/health": {"origins": allowed_origins}}, supports_credentials=True)
     else:
         CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
+        CORS(app, resources={r"/health": {"origins": "*"}}, supports_credentials=True)
 
     # Registrar blueprints
     app.register_blueprint(usuario_bp, url_prefix='/api')
@@ -52,6 +55,30 @@ def create_app():
     else:
         print("⚠️  Rutas de administración no registradas")
 
+    # Endpoint de health check
+    @app.route('/health')
+    def health_check():
+        """Endpoint para verificar el estado del servicio."""
+        # Probar conexión a la base de datos
+        database_available = False
+        try:
+            # Intentar conectar a la base de datos
+            with engine.connect() as connection:
+                connection.execute("SELECT 1")
+            database_available = True
+        except Exception as e:
+            print(f"Database connection failed: {str(e)}")
+            database_available = False
+
+        return jsonify({
+            'status': 'healthy',
+            'service': 'admin-cuestionarios',
+            'version': '2.0.0',
+            'environment': os.environ.get('FLASK_ENV', 'development'),
+            'database_available': database_available,
+            'admin_routes_enabled': ADMIN_ROUTES_AVAILABLE
+        })
+
     @app.route('/')
     def home():
         return jsonify({
@@ -59,29 +86,9 @@ def create_app():
             "status": "running",
             "environment": os.environ.get('FLASK_ENV', 'development'),
             "admin_routes": ADMIN_ROUTES_AVAILABLE,
-            "endpoints": ["/api/health", "/api/usuarios", "/api/questionnaire"] + 
+            "endpoints": ["/health", "/api/usuarios", "/api/questionnaire"] + 
                         (["/api/admin/cuestionarios"] if ADMIN_ROUTES_AVAILABLE else []),
         })
-
-    @app.route('/api/health')
-    def health_check():
-        try:
-            from database.controller import engine
-            # Verificar conexión a la base de datos
-            with engine.connect() as conn:
-                conn.execute("SELECT 1")
-            db_status = True
-        except:
-            db_status = False
-            
-        return jsonify({
-            "status": "healthy",
-            "service": "admin-cuestionarios",
-            "version": "2.0.0",
-            "database_available": db_status,
-            "admin_routes_enabled": ADMIN_ROUTES_AVAILABLE,
-            "environment": os.environ.get('FLASK_ENV', 'development'),
-        }), 200
 
     # Inicializar base de datos
     with app.app_context():
@@ -90,9 +97,9 @@ def create_app():
             Base.metadata.create_all(bind=engine)
             print("Tablas de la base de datos verificadas/creadas.")
         except Exception as db_error:
-            print(f" Error al conectar con la base de datos: {db_error}")
+            print(f"❌ Error al conectar con la base de datos: {db_error}")
             print("  La aplicación continuará, pero las funciones de base de datos no estarán disponibles.")
-            print(" Verifica la conexión a internet y la configuración de Azure SQL Server.")
+            print("  Verifica la conexión a internet y la configuración de Azure SQL Server.")
 
     return app
 
