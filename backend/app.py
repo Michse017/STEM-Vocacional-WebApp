@@ -1,13 +1,19 @@
 import os
+import sys
 from flask import Flask, jsonify
 from flask_cors import CORS
+
+# Agregar el directorio padre al path para poder importar database
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from database.controller import engine
 from database.models import Base
 
 # --- Importación de Rutas (Blueprints) ---
 # Importamos los blueprints que definen los endpoints de nuestra API.
-from .routes.usuario_routes import usuario_bp
-from .routes.questionnaire_routes import questionnaire_bp
+from routes.usuario_routes import usuario_bp
+from routes.questionnaire_routes import questionnaire_bp
+from routes.admin_cuestionarios_routes import admin_cuestionarios_bp
 
 def create_app():
     """
@@ -43,6 +49,7 @@ def create_app():
     # El `url_prefix` organiza toda tu API bajo '/api'.
     app.register_blueprint(usuario_bp, url_prefix='/api')
     app.register_blueprint(questionnaire_bp, url_prefix='/api')
+    app.register_blueprint(admin_cuestionarios_bp, url_prefix='/api/admin')
 
     # 4. Ruta raíz para verificar que el servidor está activo
     @app.route('/')

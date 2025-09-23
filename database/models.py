@@ -1,5 +1,5 @@
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, CheckConstraint
+from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, CheckConstraint, Boolean, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -26,6 +26,13 @@ class Usuario(Base):
     inteligencias_multiples = relationship(
         "RespInteligenciasMultiples", 
         uselist=False, 
+        back_populates="usuario", 
+        cascade="all, delete-orphan"
+    )
+    
+    # Relaciones con el sistema dinámico de cuestionarios
+    respuestas_cuestionarios = relationship(
+        "RespuestaCuestionario", 
         back_populates="usuario", 
         cascade="all, delete-orphan"
     )
@@ -130,3 +137,111 @@ class RespInteligenciasMultiples(Base):
 
     # Relación inversa para acceder al usuario desde la respuesta
     usuario = relationship("Usuario", back_populates="inteligencias_multiples")
+
+
+# ============================================================================
+# SISTEMA DINÁMICO DE CUESTIONARIOS
+# ============================================================================
+
+class Cuestionario(Base):
+    """
+    Tabla principal para almacenar cuestionarios dinámicos.
+    Permite crear cuestionarios sin modificar el código.
+    """
+    __tablename__ = 'cuestionarios'
+    
+    id_cuestionario = Column(Integer, primary_key=True, autoincrement=True)
+    nombre = Column(String(100), nullable=False)
+    descripcion = Column(Text)
+    activo = Column(Boolean, default=True)
+    tipo = Column(String(50))  # 'sociodemografico', 'inteligencias_multiples', 'personalidad', etc.
+    fecha_creacion = Column(DateTime, server_default=func.now())
+    fecha_actualizacion = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    
+    # Relaciones
+    preguntas = relationship("Pregunta", back_populates="cuestionario", cascade="all, delete-orphan")
+    respuestas_cuestionario = relationship("RespuestaCuestionario", back_populates="cuestionario", cascade="all, delete-orphan")
+
+
+class Pregunta(Base):
+    """
+    Tabla para almacenar las preguntas de cada cuestionario.
+    Cada pregunta pertenece a un cuestionario específico.
+    """
+    __tablename__ = 'preguntas'
+    
+    id_pregunta = Column(Integer, primary_key=True, autoincrement=True)
+    id_cuestionario = Column(Integer, ForeignKey('cuestionarios.id_cuestionario', ondelete='CASCADE'), nullable=False)
+    texto = Column(Text, nullable=False)
+    tipo_pregunta = Column(String(50), nullable=False)  # 'texto', 'seleccion_unica', 'seleccion_multiple', 'escala', 'fecha', 'numero', 'booleano'
+    requerida = Column(Boolean, default=True)
+    orden = Column(Integer, nullable=False)
+    
+    # Campos adicionales para validación
+    min_valor = Column(Integer)  # Para preguntas numéricas o escalas
+    max_valor = Column(Integer)  # Para preguntas numéricas o escalas
+    patron_validacion = Column(String(200))  # Regex para validación de texto
+    ayuda_texto = Column(Text)  # Texto de ayuda para el usuario
+    
+    fecha_creacion = Column(DateTime, server_default=func.now())
+    
+    # Relaciones
+    cuestionario = relationship("Cuestionario", back_populates="preguntas")
+    opciones = relationship("OpcionPregunta", back_populates="pregunta", cascade="all, delete-orphan")
+    respuestas = relationship("RespuestaUsuario", back_populates="pregunta", cascade="all, delete-orphan")
+
+
+class OpcionPregunta(Base):
+    """
+    Tabla para almacenar las opciones de respuesta para preguntas de selección.
+    Solo se usa para preguntas de tipo 'seleccion_unica' o 'seleccion_multiple'.
+    """
+    __tablename__ = 'opciones_pregunta'
+    
+    id_opcion = Column(Integer, primary_key=True, autoincrement=True)
+    id_pregunta = Column(Integer, ForeignKey('preguntas.id_pregunta', ondelete='CASCADE'), nullable=False)
+    texto = Column(String(200), nullable=False)
+    valor = Column(String(100))  # Valor interno que se almacena (puede ser diferente al texto mostrado)
+    orden = Column(Integer, nullable=False)
+    activa = Column(Boolean, default=True)
+    
+    fecha_creacion = Column(DateTime, server_default=func.now())
+    
+    # Relaciones
+    pregunta = relationship("Pregunta", back_populates="opciones")
+
+
+class RespuestaCuestionario(Base):
+    """
+    Tabla para rastrear qué cuestionarios ha completado cada usuario.
+    """
+    __tablename__ = 'respuestas_cuestionario'
+    
+    id_respuesta_cuestionario = Column(Integer, primary_key=True, autoincrement=True)
+    id_usuario = Column(Integer, ForeignKey('usuarios.id_usuario', ondelete='CASCADE'), nullable=False)
+    id_cuestionario = Column(Integer, ForeignKey('cuestionarios.id_cuestionario', ondelete='CASCADE'), nullable=False)
+    completado = Column(Boolean, default=False)
+    fecha_inicio = Column(DateTime, server_default=func.now())
+    fecha_completado = Column(DateTime)
+    
+    # Relaciones
+    usuario = relationship("Usuario")
+    cuestionario = relationship("Cuestionario", back_populates="respuestas_cuestionario")
+    respuestas_detalle = relationship("RespuestaUsuario", back_populates="respuesta_cuestionario", cascade="all, delete-orphan")
+
+
+class RespuestaUsuario(Base):
+    """
+    Tabla para almacenar las respuestas individuales de cada usuario a cada pregunta.
+    """
+    __tablename__ = 'respuestas_usuario'
+    
+    id_respuesta = Column(Integer, primary_key=True, autoincrement=True)
+    id_respuesta_cuestionario = Column(Integer, ForeignKey('respuestas_cuestionario.id_respuesta_cuestionario', ondelete='CASCADE'), nullable=False)
+    id_pregunta = Column(Integer, ForeignKey('preguntas.id_pregunta', ondelete='CASCADE'), nullable=False)
+    valor_respuesta = Column(Text)  # Almacena la respuesta en formato texto (JSON para respuestas múltiples)
+    fecha_respuesta = Column(DateTime, server_default=func.now())
+    
+    # Relaciones
+    respuesta_cuestionario = relationship("RespuestaCuestionario", back_populates="respuestas_detalle")
+    pregunta = relationship("Pregunta", back_populates="respuestas")
