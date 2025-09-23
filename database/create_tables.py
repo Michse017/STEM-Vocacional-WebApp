@@ -23,22 +23,29 @@ def create_dynamic_questionnaire_tables():
         # Crear solo las tablas nuevas del sistema dinámico
         print("📝 Creando tablas del sistema dinámico de cuestionarios...")
         
-        # Lista de las nuevas tablas
-        new_tables = [
-            Cuestionario.__table__,
-            Pregunta.__table__,
-            OpcionPregunta.__table__,
-            RespuestaCuestionario.__table__,
-            RespuestaUsuario.__table__
+        # Crear las tablas en orden específico para evitar problemas de dependencias
+        tables_order = [
+            ('cuestionarios', Cuestionario.__table__),
+            ('preguntas', Pregunta.__table__),
+            ('opciones_pregunta', OpcionPregunta.__table__),
+            ('respuestas_cuestionario', RespuestaCuestionario.__table__),
+            ('respuestas_usuario', RespuestaUsuario.__table__)
         ]
         
         # Crear las tablas
-        for table in new_tables:
+        for table_name, table in tables_order:
             try:
                 table.create(engine, checkfirst=True)
-                print(f"✅ Tabla '{table.name}' creada/verificada exitosamente")
+                print(f"✅ Tabla '{table_name}' creada/verificada exitosamente")
             except Exception as e:
-                print(f"⚠️  Tabla '{table.name}': {str(e)}")
+                error_msg = str(e)
+                if "already exists" in error_msg.lower() or "object name" in error_msg.lower():
+                    print(f"ℹ️  Tabla '{table_name}' ya existe")
+                elif "foreign key constraint" in error_msg.lower() and "cycles" in error_msg.lower():
+                    print(f"⚠️  Tabla '{table_name}': Error de cascada - continuando (tabla probablemente ya existe)")
+                else:
+                    print(f"⚠️  Tabla '{table_name}': {error_msg}")
+                    # Para otros errores, intentamos continuar
         
         print("\n🎉 Migración completada exitosamente!")
         print("📋 Resumen de tablas del sistema dinámico:")

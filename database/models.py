@@ -242,7 +242,7 @@ class RespuestaUsuario(Base):
     
     id_respuesta = Column(Integer, primary_key=True, autoincrement=True)
     id_respuesta_cuestionario = Column(Integer, ForeignKey('respuestas_cuestionario.id_respuesta_cuestionario', ondelete='CASCADE'), nullable=False)
-    id_pregunta = Column(Integer, ForeignKey('preguntas.id_pregunta', ondelete='CASCADE'), nullable=False)
+    id_pregunta = Column(Integer, ForeignKey('preguntas.id_pregunta'), nullable=False)  # Sin CASCADE para evitar ciclos
     valor_respuesta = Column(Text)  # Almacena la respuesta en formato texto (JSON para respuestas múltiples)
     fecha_respuesta = Column(DateTime, server_default=func.now())
     
