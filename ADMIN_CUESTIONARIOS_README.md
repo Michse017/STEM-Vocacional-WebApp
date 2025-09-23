@@ -1,5 +1,76 @@
 # Sistema de Administración de Cuestionarios Dinámicos 🚀
 
+## 📖 Guía de Uso - Cómo Crear Cuestionarios Completos
+
+### 🎯 **Flujo Principal: Crear un Cuestionario con Preguntas**
+
+#### **PASO 1: Crear el Cuestionario Base**
+1. **Accede al panel de administración** en http://localhost:3000
+2. Haz clic en **"Nuevo Cuestionario"**
+3. Completa los campos básicos:
+   - ✅ **Nombre del Cuestionario** (obligatorio) 
+   - ✅ **Descripción** (opcional pero recomendado)
+   - ✅ **Tipo de Cuestionario** (selecciona el apropiado)
+4. Haz clic en **"Crear"**
+5. ✅ **El cuestionario base se crea exitosamente**
+
+#### **PASO 2: Agregar Preguntas al Cuestionario**
+1. **En la lista de cuestionarios**, busca el que acabas de crear
+2. Haz clic en **"Ver Preguntas"** (botón azul)
+3. Se abre el **Modal de Gestión de Preguntas**
+4. Haz clic en **"+ Nueva Pregunta"**
+5. Completa el formulario de pregunta:
+   - ✅ **Texto de la pregunta** (obligatorio)
+   - ✅ **Tipo de pregunta** (texto, selección, múltiple, etc.)
+   - ☑️ **Marcar como requerida** (opcional)
+   - ➕ **Agregar opciones** (para preguntas de selección)
+6. Haz clic en **"Crear Pregunta"**
+7. **Repite el proceso** para todas las preguntas necesarias
+
+#### **PASO 3: Verificar el Cuestionario Completo**
+1. **Cierra el modal** de gestión de preguntas
+2. El cuestionario ahora está **completo y funcional**
+3. Los usuarios pueden verlo en la página principal
+4. Pueden responder todas las preguntas que creaste
+
+### 🔧 **Funcionalidades Disponibles**
+
+#### **Gestión de Cuestionarios**
+- ✅ Crear cuestionarios con información básica
+- ✅ Editar cuestionarios existentes
+- ✅ Eliminar cuestionarios
+- ✅ Ver lista completa de cuestionarios
+
+#### **Gestión de Preguntas**
+- ✅ Agregar preguntas de diferentes tipos
+- ✅ Editar preguntas existentes
+- ✅ Eliminar preguntas no necesarias
+- ✅ Reordenar preguntas automáticamente
+
+#### **Tipos de Preguntas Soportados**
+- 📝 **Texto libre** - Respuesta abierta corta
+- 📄 **Área de texto** - Respuesta abierta larga
+- 🔢 **Número** - Solo valores numéricos
+- ☑️ **Selección única** - Una opción de varias
+- ✅ **Opción múltiple** - Varias opciones permitidas
+- ☐ **Casilla de verificación** - Verdadero/Falso
+
+### ⚠️ **Puntos Importantes**
+
+1. **No puedes agregar preguntas durante la creación inicial**
+   - Primero crea el cuestionario base
+   - Luego agrega preguntas usando "Ver Preguntas"
+
+2. **Las preguntas se guardan inmediatamente**
+   - No necesitas "guardar" el cuestionario después de agregar preguntas
+   - Cada pregunta se guarda al crearla/editarla
+
+3. **Los usuarios ven cuestionarios completos**
+   - Solo aparecen en la página de usuarios los cuestionarios con preguntas
+   - El sistema integra automáticamente admin → usuarios
+
+---
+
 ## Resumen de Implementación
 
 Se ha implementado exitosamente un sistema completo de administración de cuestionarios dinámicos que reemplaza el sistema rígido anterior. Ahora los administradores pueden crear, editar y eliminar cuestionarios sin necesidad de modificar código o estructura de base de datos.

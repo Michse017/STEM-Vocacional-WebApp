@@ -162,30 +162,9 @@ const AdminCuestionarios = () => {
         }
     };
 
-    const verDetalle = async (id) => {
-        try {
-            const baseUrl = getBaseUrl();
-            const response = await fetch(`${baseUrl}/admin/cuestionarios/${id}`);
-            const data = await response.json();
-            
-            if (data.success) {
-                if (data.data.preguntas && data.data.preguntas.length > 0) {
-                    // Mostrar preguntas existentes
-                    const preguntasTexto = data.data.preguntas
-                        .map((p, i) => `${i + 1}. ${p.texto_pregunta}`)
-                        .join('\n');
-                    alert(`Preguntas en "${data.data.nombre}":\n\n${preguntasTexto}`);
-                } else {
-                    const verPreguntas = (cuestionario) => {
+    const verPreguntas = (cuestionario) => {
         setCuestionarioPreguntasSeleccionado(cuestionario);
         setGestionPreguntasAbierto(true);
-    };
-                }
-            }
-        } catch (err) {
-            console.error('Error:', err);
-            alert('Error al cargar el detalle del cuestionario');
-        }
     };
 
     if (loading) {
@@ -264,7 +243,7 @@ const AdminCuestionarios = () => {
                             
                             <div className="card-actions">
                                 <button 
-                                    onClick={() => verDetalle(cuestionario.id_cuestionario)}
+                                    onClick={() => verPreguntas(cuestionario)}
                                     className="btn-secondary"
                                 >
                                     Ver Preguntas
