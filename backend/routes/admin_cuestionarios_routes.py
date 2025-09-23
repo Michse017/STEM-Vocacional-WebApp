@@ -424,6 +424,65 @@ def eliminar_cuestionario(db_session, id_cuestionario):
 # ENDPOINTS PARA PREGUNTAS
 # ============================================================================
 
+@admin_cuestionarios_bp.route('/cuestionarios/<int:id_cuestionario>/preguntas', methods=['GET'])
+@handle_db_session
+def listar_preguntas(db_session, id_cuestionario):
+    """Lista todas las preguntas de un cuestionario."""
+    try:
+        # Verificar que el cuestionario existe
+        cuestionario_service = CuestionarioService(db_session)
+        cuestionario = cuestionario_service.obtener_cuestionario_por_id(id_cuestionario)
+        if not cuestionario:
+            return jsonify({'success': False, 'error': 'Cuestionario no encontrado'}), 404
+        
+        # Obtener preguntas del cuestionario
+        pregunta_service = PreguntaService(db_session)
+        preguntas = cuestionario_service.obtener_preguntas_cuestionario(id_cuestionario)
+        
+        # Formatear respuesta
+        preguntas_data = []
+        for pregunta in preguntas:
+            # Obtener opciones de la pregunta
+            opciones = pregunta_service.obtener_opciones_pregunta(pregunta.id_pregunta)
+            opciones_data = [
+                {
+                    'id_opcion': opcion.id_opcion,
+                    'texto_opcion': opcion.texto,
+                    'valor': opcion.valor,
+                    'orden': opcion.orden
+                }
+                for opcion in opciones
+            ]
+            
+            preguntas_data.append({
+                'id_pregunta': pregunta.id_pregunta,
+                'texto_pregunta': pregunta.texto,
+                'tipo_pregunta': pregunta.tipo_pregunta,
+                'requerida': pregunta.requerida,
+                'orden': pregunta.orden,
+                'min_valor': pregunta.min_valor,
+                'max_valor': pregunta.max_valor,
+                'patron_validacion': pregunta.patron_validacion,
+                'ayuda_texto': pregunta.ayuda_texto,
+                'opciones': opciones_data
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': preguntas_data,
+            'count': len(preguntas_data),
+            'cuestionario': {
+                'id_cuestionario': cuestionario.id_cuestionario,
+                'nombre': cuestionario.nombre,
+                'descripcion': cuestionario.descripcion
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error al listar preguntas: {str(e)}")
+        return jsonify({'success': False, 'error': 'Error al obtener preguntas'}), 500
+
+
 @admin_cuestionarios_bp.route('/cuestionarios/<int:id_cuestionario>/preguntas', methods=['POST'])
 @handle_db_session
 def crear_pregunta(db_session, id_cuestionario):
