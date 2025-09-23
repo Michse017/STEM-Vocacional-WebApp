@@ -45,7 +45,7 @@ def create_app():
 
     # Registrar rutas de administración solo si están disponibles
     if ADMIN_ROUTES_AVAILABLE:
-        app.register_blueprint(admin_cuestionarios_bp, url_prefix='/api')
+        app.register_blueprint(admin_cuestionarios_bp, url_prefix='/api/admin')
         print("✅ Rutas de administración registradas")
     else:
         print("⚠️  Rutas de administración no registradas")
