@@ -79,7 +79,7 @@ def listar_cuestionarios(db_session):
 @admin_cuestionarios_bp.route('/cuestionarios', methods=['POST'])
 @handle_db_session
 def crear_cuestionario(db_session):
-    """Crea un nuevo cuestionario."""
+    """Crea un nuevo cuestionario con preguntas opcionales."""
     try:
         data = request.get_json()
         
@@ -87,12 +87,53 @@ def crear_cuestionario(db_session):
         if not data or not data.get('nombre'):
             return jsonify({'success': False, 'error': 'El nombre del cuestionario es requerido'}), 400
         
-        service = CuestionarioService(db_session)
-        cuestionario = service.crear_cuestionario(
+        # Crear cuestionario
+        cuestionario_service = CuestionarioService(db_session)
+        cuestionario = cuestionario_service.crear_cuestionario(
             nombre=data['nombre'],
             descripcion=data.get('descripcion'),
             tipo=data.get('tipo')
         )
+        
+        # Crear preguntas si las hay
+        preguntas_creadas = []
+        preguntas_data = data.get('preguntas', [])
+        if preguntas_data:
+            pregunta_service = PreguntaService(db_session)
+            
+            for pregunta_data in preguntas_data:
+                pregunta = pregunta_service.crear_pregunta(
+                    id_cuestionario=cuestionario.id_cuestionario,
+                    texto=pregunta_data['texto_pregunta'],
+                    tipo_pregunta=pregunta_data['tipo_pregunta'],
+                    requerida=pregunta_data.get('requerida', True),
+                    orden=pregunta_data.get('orden', 1)
+                )
+                
+                # Crear opciones si las hay
+                opciones_creadas = []
+                opciones_data = pregunta_data.get('opciones', [])
+                for opcion_data in opciones_data:
+                    opcion = pregunta_service.crear_opcion_pregunta(
+                        id_pregunta=pregunta.id_pregunta,
+                        texto=opcion_data['texto_opcion'],
+                        valor=opcion_data.get('valor'),
+                        orden=opcion_data.get('orden')
+                    )
+                    opciones_creadas.append({
+                        'id_opcion': opcion.id_opcion,
+                        'texto_opcion': opcion.texto,
+                        'valor': opcion.valor
+                    })
+                
+                preguntas_creadas.append({
+                    'id_pregunta': pregunta.id_pregunta,
+                    'texto_pregunta': pregunta.texto,
+                    'tipo_pregunta': pregunta.tipo_pregunta,
+                    'requerida': pregunta.requerida,
+                    'orden': pregunta.orden,
+                    'opciones': opciones_creadas
+                })
         
         return jsonify({
             'success': True,
@@ -101,9 +142,14 @@ def crear_cuestionario(db_session):
                 'nombre': cuestionario.nombre,
                 'descripcion': cuestionario.descripcion,
                 'tipo': cuestionario.tipo,
-                'activo': cuestionario.activo
+                'total_preguntas': len(preguntas_creadas),
+                'preguntas': preguntas_creadas
             }
         }), 201
+        
+    except Exception as e:
+        logger.error(f"Error al crear cuestionario: {str(e)}")
+        return jsonify({'success': False, 'error': 'Error al crear cuestionario'}), 500
         
     except Exception as e:
         logger.error(f"Error al crear cuestionario: {str(e)}")

@@ -11,6 +11,16 @@ const AdminCuestionarios = () => {
     const [modoEdicion, setModoEdicion] = useState(false);
     const [gestionPreguntasAbierto, setGestionPreguntasAbierto] = useState(false);
     const [cuestionarioPreguntasSeleccionado, setCuestionarioPreguntasSeleccionado] = useState(null);
+
+    // Estado para preguntas en el formulario
+    const [preguntasFormulario, setPreguntasFormulario] = useState([]);
+    const [nuevaPregunta, setNuevaPregunta] = useState({
+        texto_pregunta: '',
+        tipo_pregunta: 'text',
+        requerida: false,
+        opciones: []
+    });
+    const [nuevaOpcion, setNuevaOpcion] = useState('');
     const [modo, setModo] = useState('unknown'); // 'mock', 'database', 'unknown'
 
     // Estados para el formulario
@@ -65,6 +75,8 @@ const AdminCuestionarios = () => {
                 descripcion: cuestionario.descripcion || '',
                 tipo: cuestionario.tipo || ''
             });
+            // TODO: Cargar preguntas existentes para edición
+            setPreguntasFormulario([]);
         } else {
             // Modo creación
             setModoEdicion(false);
@@ -74,6 +86,7 @@ const AdminCuestionarios = () => {
                 descripcion: '',
                 tipo: ''
             });
+            setPreguntasFormulario([]);
         }
         setModalAbierto(true);
     };
@@ -87,6 +100,14 @@ const AdminCuestionarios = () => {
             descripcion: '',
             tipo: ''
         });
+        setPreguntasFormulario([]);
+        setNuevaPregunta({
+            texto_pregunta: '',
+            tipo_pregunta: 'text',
+            requerida: false,
+            opciones: []
+        });
+        setNuevaOpcion('');
     };
 
     const manejarCambioFormulario = (e) => {
@@ -108,12 +129,24 @@ const AdminCuestionarios = () => {
             
             const method = modoEdicion ? 'PUT' : 'POST';
             
+            // Incluir preguntas en el payload
+            const payload = {
+                ...formulario,
+                preguntas: preguntasFormulario.map((pregunta, index) => ({
+                    texto_pregunta: pregunta.texto_pregunta,
+                    tipo_pregunta: pregunta.tipo_pregunta,
+                    requerida: pregunta.requerida,
+                    orden: index + 1,
+                    opciones: pregunta.opciones || []
+                }))
+            };
+            
             const response = await fetch(url, {
                 method: method,
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(formulario)
+                body: JSON.stringify(payload)
             });
             
             const data = await response.json();
@@ -123,7 +156,7 @@ const AdminCuestionarios = () => {
                 cargarCuestionarios(); // Recargar la lista
                 const mensaje = data.mode === 'mock' 
                     ? `${modoEdicion ? 'Cuestionario actualizado' : 'Cuestionario creado'} (modo demostración)`
-                    : `${modoEdicion ? 'Cuestionario actualizado' : 'Cuestionario creado'} exitosamente`;
+                    : `${modoEdicion ? 'Cuestionario actualizado' : 'Cuestionario creado'} exitosamente con ${preguntasFormulario.length} preguntas`;
                 alert(mensaje);
             } else {
                 alert('Error: ' + data.error);
@@ -165,6 +198,51 @@ const AdminCuestionarios = () => {
     const verPreguntas = (cuestionario) => {
         setCuestionarioPreguntasSeleccionado(cuestionario);
         setGestionPreguntasAbierto(true);
+    };
+
+    // Funciones para manejar preguntas en el formulario
+    const manejarCambioNuevaPregunta = (e) => {
+        const { name, value, type, checked } = e.target;
+        setNuevaPregunta(prev => ({
+            ...prev,
+            [name]: type === 'checkbox' ? checked : value
+        }));
+    };
+
+    const agregarOpcionPregunta = () => {
+        if (nuevaOpcion.trim()) {
+            setNuevaPregunta(prev => ({
+                ...prev,
+                opciones: [...prev.opciones, { texto_opcion: nuevaOpcion.trim() }]
+            }));
+            setNuevaOpcion('');
+        }
+    };
+
+    const eliminarOpcionPregunta = (index) => {
+        setNuevaPregunta(prev => ({
+            ...prev,
+            opciones: prev.opciones.filter((_, i) => i !== index)
+        }));
+    };
+
+    const agregarPreguntaAlFormulario = () => {
+        if (nuevaPregunta.texto_pregunta.trim()) {
+            setPreguntasFormulario(prev => [...prev, {
+                ...nuevaPregunta,
+                id_temporal: Date.now() // ID temporal para React key
+            }]);
+            setNuevaPregunta({
+                texto_pregunta: '',
+                tipo_pregunta: 'text',
+                requerida: false,
+                opciones: []
+            });
+        }
+    };
+
+    const eliminarPreguntaDelFormulario = (idTemporal) => {
+        setPreguntasFormulario(prev => prev.filter(p => p.id_temporal !== idTemporal));
     };
 
     if (loading) {
@@ -317,6 +395,137 @@ const AdminCuestionarios = () => {
                                     <option value="academico">Académico</option>
                                     <option value="otro">Otro</option>
                                 </select>
+                            </div>
+
+                            {/* Sección de Preguntas */}
+                            <div className="campo-preguntas">
+                                <h3>Preguntas del Cuestionario</h3>
+                                
+                                {/* Lista de preguntas agregadas */}
+                                {preguntasFormulario.length > 0 && (
+                                    <div className="preguntas-agregadas">
+                                        <h4>Preguntas Agregadas ({preguntasFormulario.length}):</h4>
+                                        {preguntasFormulario.map((pregunta, index) => (
+                                            <div key={pregunta.id_temporal} className="pregunta-item">
+                                                <div className="pregunta-header">
+                                                    <span className="pregunta-numero">{index + 1}.</span>
+                                                    <span className="pregunta-tipo">[{pregunta.tipo_pregunta}]</span>
+                                                    {pregunta.requerida && <span className="required-badge">Requerida</span>}
+                                                </div>
+                                                <div className="pregunta-texto">{pregunta.texto_pregunta}</div>
+                                                {pregunta.opciones && pregunta.opciones.length > 0 && (
+                                                    <div className="pregunta-opciones">
+                                                        <strong>Opciones:</strong> {pregunta.opciones.map(op => op.texto_opcion).join(', ')}
+                                                    </div>
+                                                )}
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => eliminarPreguntaDelFormulario(pregunta.id_temporal)}
+                                                    className="btn-danger btn-sm"
+                                                >
+                                                    Eliminar
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Formulario para nueva pregunta */}
+                                <div className="nueva-pregunta">
+                                    <h4>Agregar Nueva Pregunta:</h4>
+                                    
+                                    <div className="campo">
+                                        <label>Texto de la Pregunta *</label>
+                                        <textarea
+                                            name="texto_pregunta"
+                                            value={nuevaPregunta.texto_pregunta}
+                                            onChange={manejarCambioNuevaPregunta}
+                                            placeholder="Escribe la pregunta..."
+                                            rows="2"
+                                        />
+                                    </div>
+
+                                    <div className="campo">
+                                        <label>Tipo de Pregunta</label>
+                                        <select
+                                            name="tipo_pregunta"
+                                            value={nuevaPregunta.tipo_pregunta}
+                                            onChange={manejarCambioNuevaPregunta}
+                                        >
+                                            <option value="text">Texto libre</option>
+                                            <option value="textarea">Área de texto</option>
+                                            <option value="number">Número</option>
+                                            <option value="select">Selección única</option>
+                                            <option value="multiple_choice">Opción múltiple</option>
+                                            <option value="checkbox">Casilla de verificación</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="campo">
+                                        <label className="checkbox-label">
+                                            <input
+                                                type="checkbox"
+                                                name="requerida"
+                                                checked={nuevaPregunta.requerida}
+                                                onChange={manejarCambioNuevaPregunta}
+                                            />
+                                            Esta pregunta es requerida
+                                        </label>
+                                    </div>
+
+                                    {/* Opciones para preguntas de selección */}
+                                    {['select', 'multiple_choice'].includes(nuevaPregunta.tipo_pregunta) && (
+                                        <div className="campo">
+                                            <label>Opciones de Respuesta</label>
+                                            <div className="opciones-input">
+                                                <input
+                                                    type="text"
+                                                    value={nuevaOpcion}
+                                                    onChange={(e) => setNuevaOpcion(e.target.value)}
+                                                    placeholder="Nueva opción..."
+                                                    onKeyPress={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            agregarOpcionPregunta();
+                                                        }
+                                                    }}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={agregarOpcionPregunta}
+                                                    className="btn-secondary btn-sm"
+                                                >
+                                                    Agregar
+                                                </button>
+                                            </div>
+                                            {nuevaPregunta.opciones.length > 0 && (
+                                                <div className="opciones-lista">
+                                                    {nuevaPregunta.opciones.map((opcion, index) => (
+                                                        <div key={index} className="opcion-item">
+                                                            <span>{opcion.texto_opcion}</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => eliminarOpcionPregunta(index)}
+                                                                className="btn-danger btn-sm"
+                                                            >
+                                                                ×
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    <button
+                                        type="button"
+                                        onClick={agregarPreguntaAlFormulario}
+                                        className="btn-primary btn-sm"
+                                        disabled={!nuevaPregunta.texto_pregunta.trim()}
+                                    >
+                                        + Agregar Pregunta
+                                    </button>
+                                </div>
                             </div>
                             
                             <div className="modal-actions">
