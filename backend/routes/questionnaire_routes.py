@@ -3,9 +3,134 @@ from pydantic import ValidationError
 from ..schemas.questionnaire_schemas import CuestionarioCompletoSchema
 from ..services.questionnaire_service import guardar_respuestas_cuestionario, finalizar_cuestionario
 from database.controller import SessionLocal
+from database.models import Cuestionario, Pregunta, OpcionPregunta
 import traceback
 
 questionnaire_bp = Blueprint('questionnaire_bp', __name__)
+
+# ============================================================================
+# ENDPOINTS PARA USUARIOS - INTEGRACIÓN CON CUESTIONARIOS DINÁMICOS
+# ============================================================================
+
+@questionnaire_bp.route('/cuestionarios', methods=['GET'])
+def listar_cuestionarios_usuarios():
+    """
+    Lista todos los cuestionarios activos disponibles para usuarios.
+    Integra el sistema de administración con el sistema de usuarios.
+    """
+    db_session = SessionLocal()
+    try:
+        # Obtener solo cuestionarios activos
+        cuestionarios = db_session.query(Cuestionario).filter(
+            Cuestionario.activo == True
+        ).all()
+        
+        result = []
+        for cuest in cuestionarios:
+            # Contar preguntas
+            num_preguntas = db_session.query(Pregunta).filter(
+                Pregunta.id_cuestionario == cuest.id_cuestionario
+            ).count()
+            
+            result.append({
+                'id_cuestionario': cuest.id_cuestionario,
+                'nombre': cuest.nombre,
+                'descripcion': cuest.descripcion,
+                'tipo': cuest.tipo,
+                'num_preguntas': num_preguntas,
+                'fecha_creacion': cuest.fecha_creacion.isoformat() if cuest.fecha_creacion else None
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': result,
+            'count': len(result),
+            'message': 'Cuestionarios disponibles para usuarios'
+        })
+        
+    except Exception as e:
+        print(f"Error al listar cuestionarios para usuarios: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Error al obtener cuestionarios',
+            'message': str(e)
+        }), 500
+        
+    finally:
+        db_session.close()
+
+@questionnaire_bp.route('/cuestionarios/<int:id_cuestionario>', methods=['GET'])
+def obtener_cuestionario_usuario(id_cuestionario):
+    """
+    Obtiene un cuestionario específico con sus preguntas para que un usuario lo responda.
+    """
+    db_session = SessionLocal()
+    try:
+        # Obtener cuestionario
+        cuestionario = db_session.query(Cuestionario).filter(
+            Cuestionario.id_cuestionario == id_cuestionario,
+            Cuestionario.activo == True
+        ).first()
+        
+        if not cuestionario:
+            return jsonify({
+                'success': False,
+                'error': 'Cuestionario no encontrado o no disponible'
+            }), 404
+        
+        # Obtener preguntas del cuestionario
+        preguntas = db_session.query(Pregunta).filter(
+            Pregunta.id_cuestionario == id_cuestionario
+        ).order_by(Pregunta.orden).all()
+        
+        preguntas_data = []
+        for pregunta in preguntas:
+            # Obtener opciones de la pregunta
+            opciones = db_session.query(OpcionPregunta).filter(
+                OpcionPregunta.id_pregunta == pregunta.id_pregunta
+            ).order_by(OpcionPregunta.orden).all()
+            
+            opciones_data = [{
+                'id_opcion': opcion.id_opcion,
+                'texto_opcion': opcion.texto_opcion,
+                'valor': opcion.valor,
+                'orden': opcion.orden
+            } for opcion in opciones]
+            
+            preguntas_data.append({
+                'id_pregunta': pregunta.id_pregunta,
+                'texto_pregunta': pregunta.texto_pregunta,
+                'tipo_pregunta': pregunta.tipo_pregunta,
+                'orden': pregunta.orden,
+                'requerida': pregunta.requerida,
+                'opciones': opciones_data
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'id_cuestionario': cuestionario.id_cuestionario,
+                'nombre': cuestionario.nombre,
+                'descripcion': cuestionario.descripcion,
+                'tipo': cuestionario.tipo,
+                'preguntas': preguntas_data
+            }
+        })
+        
+    except Exception as e:
+        print(f"Error al obtener cuestionario {id_cuestionario}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Error al obtener cuestionario',
+            'message': str(e)
+        }), 500
+        
+    finally:
+        db_session.close()
+
+# ============================================================================
+# ENDPOINTS ORIGINALES DEL SISTEMA
+# ============================================================================
 
 @questionnaire_bp.route('/cuestionario', methods=['POST'])
 def submit_questionnaire():
