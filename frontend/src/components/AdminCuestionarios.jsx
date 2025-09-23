@@ -66,8 +66,13 @@ const AdminCuestionarios = () => {
     };
 
     const abrirModal = (cuestionario = null) => {
+        console.log('=== ABRIENDO MODAL ===');
+        console.log('Cuestionario para editar:', cuestionario);
+        console.log('preguntasFormulario actual antes de abrir modal:', preguntasFormulario);
+        
         if (cuestionario) {
             // Modo edición
+            console.log('Modo: EDICIÓN');
             setModoEdicion(true);
             setCuestionarioSeleccionado(cuestionario);
             setFormulario({
@@ -79,6 +84,7 @@ const AdminCuestionarios = () => {
             setPreguntasFormulario([]);
         } else {
             // Modo creación
+            console.log('Modo: CREACIÓN');
             setModoEdicion(false);
             setCuestionarioSeleccionado(null);
             setFormulario({
@@ -86,12 +92,18 @@ const AdminCuestionarios = () => {
                 descripcion: '',
                 tipo: ''
             });
-            setPreguntasFormulario([]);
+            // NO resetear preguntasFormulario aquí para modo creación
+            // El usuario puede ya haber agregado preguntas
+            console.log('NO reseteando preguntasFormulario para modo creación');
         }
         setModalAbierto(true);
+        console.log('preguntasFormulario después de abrir modal:', preguntasFormulario);
     };
 
     const cerrarModal = () => {
+        console.log('=== CERRANDO MODAL ===');
+        console.log('preguntasFormulario al cerrar:', preguntasFormulario);
+        
         setModalAbierto(false);
         setCuestionarioSeleccionado(null);
         setModoEdicion(false);
@@ -100,6 +112,7 @@ const AdminCuestionarios = () => {
             descripcion: '',
             tipo: ''
         });
+        // Resetear preguntas al cerrar modal (cancelar)
         setPreguntasFormulario([]);
         setNuevaPregunta({
             texto_pregunta: '',
@@ -108,6 +121,7 @@ const AdminCuestionarios = () => {
             opciones: []
         });
         setNuevaOpcion('');
+        console.log('Modal cerrado y estado reseteado');
     };
 
     const manejarCambioFormulario = (e) => {
@@ -168,6 +182,11 @@ const AdminCuestionarios = () => {
             if (data.success) {
                 cerrarModal();
                 await cargarCuestionarios(); // Recargar la lista y esperar a que termine
+                
+                // Resetear preguntas después de guardar exitosamente
+                console.log('Guardado exitoso, reseteando preguntasFormulario');
+                setPreguntasFormulario([]);
+                
                 const mensaje = data.mode === 'mock' 
                     ? `${modoEdicion ? 'Cuestionario actualizado' : 'Cuestionario creado'} (modo demostración)`
                     : `${modoEdicion ? 'Cuestionario actualizado' : 'Cuestionario creado'} exitosamente con ${preguntasFormulario.length} preguntas`;
