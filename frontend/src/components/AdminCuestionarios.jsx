@@ -143,29 +143,14 @@ const AdminCuestionarios = () => {
             
             const method = modoEdicion ? 'PUT' : 'POST';
             
-            // DEBUG: Verificar estado antes de crear payload
-            console.log('=== DEBUG FRONTEND ===');
-            console.log('preguntasFormulario estado actual:', preguntasFormulario);
-            console.log('Número de preguntas en formulario:', preguntasFormulario.length);
-            preguntasFormulario.forEach((pregunta, index) => {
-                console.log(`Pregunta ${index + 1}:`, pregunta);
-            });
-            
-            // Incluir preguntas en el payload
+            // Payload simplificado - las preguntas se manejan separadamente en GestionPreguntas
             const payload = {
-                ...formulario,
-                preguntas: preguntasFormulario.map((pregunta, index) => ({
-                    texto_pregunta: pregunta.texto_pregunta,
-                    tipo_pregunta: pregunta.tipo_pregunta,
-                    requerida: pregunta.requerida,
-                    orden: index + 1,
-                    opciones: pregunta.opciones || []
-                }))
+                ...formulario
             };
             
-            console.log('Payload completo a enviar:', payload);
-            console.log('Preguntas en payload:', payload.preguntas);
-            console.log('Número de preguntas a enviar:', payload.preguntas.length);
+            console.log('=== DEBUG FRONTEND ===');
+            console.log('Payload a enviar (SIN preguntas):', payload);
+            console.log('Las preguntas se manejan separadamente en GestionPreguntas');
             
             const response = await fetch(url, {
                 method: method,
@@ -183,13 +168,11 @@ const AdminCuestionarios = () => {
                 cerrarModal();
                 await cargarCuestionarios(); // Recargar la lista y esperar a que termine
                 
-                // Resetear preguntas después de guardar exitosamente
-                console.log('Guardado exitoso, reseteando preguntasFormulario');
-                setPreguntasFormulario([]);
+                console.log('Guardado exitoso');
                 
                 const mensaje = data.mode === 'mock' 
                     ? `${modoEdicion ? 'Cuestionario actualizado' : 'Cuestionario creado'} (modo demostración)`
-                    : `${modoEdicion ? 'Cuestionario actualizado' : 'Cuestionario creado'} exitosamente con ${preguntasFormulario.length} preguntas`;
+                    : `${modoEdicion ? 'Cuestionario actualizado' : 'Cuestionario creado'} exitosamente. Usa 'Ver Preguntas' para agregar preguntas.`;
                 alert(mensaje);
                 console.log('Cuestionario guardado:', data.data);
             } else {
