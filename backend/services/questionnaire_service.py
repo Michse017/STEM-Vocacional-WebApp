@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from database import controller as db_controller
-from ..schemas.questionnaire_schemas import (
+from schemas.questionnaire_schemas import (
     CuestionarioCompletoSchema,
     SociodemograficaSchema,
     InteligenciasMultiplesSchema,

@@ -11,12 +11,12 @@ from database.models import Base
 
 # --- Importación de Rutas (Blueprints) ---
 # Importamos los blueprints que definen los endpoints de nuestra API.
-from .routes.usuario_routes import usuario_bp
-from .routes.questionnaire_routes import questionnaire_bp
+from routes.usuario_routes import usuario_bp
+from routes.questionnaire_routes import questionnaire_bp
 
 # Intentar importar rutas de administración
 try:
-    from .routes.admin_cuestionarios_routes_v2 import admin_cuestionarios_bp
+    from routes.admin_cuestionarios_routes_v2 import admin_cuestionarios_bp
     ADMIN_ROUTES_AVAILABLE = True
 except ImportError:
     print("⚠️  Rutas de administración no disponibles")

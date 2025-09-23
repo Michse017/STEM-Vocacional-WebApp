@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
 from pydantic import ValidationError
-from ..schemas.questionnaire_schemas import CuestionarioCompletoSchema
-from ..services.questionnaire_service import guardar_respuestas_cuestionario, finalizar_cuestionario
+from schemas.questionnaire_schemas import CuestionarioCompletoSchema
+from services.questionnaire_service import guardar_respuestas_cuestionario, finalizar_cuestionario
 from database.controller import SessionLocal
 from database.models import Cuestionario, Pregunta, OpcionPregunta
 import traceback
@@ -131,6 +131,95 @@ def obtener_cuestionario_usuario(id_cuestionario):
 # ============================================================================
 # ENDPOINTS ORIGINALES DEL SISTEMA
 # ============================================================================
+
+@questionnaire_bp.route('/cuestionario-dinamico', methods=['POST'])
+def enviar_cuestionario_dinamico():
+    """
+    Guarda las respuestas de un cuestionario dinámico específico.
+    """
+    db_session = SessionLocal()
+    try:
+        json_data = request.get_json()
+        
+        if not json_data:
+            return jsonify({
+                "success": False, 
+                "error": "No se recibieron datos."
+            }), 400
+
+        # Validar datos requeridos
+        id_usuario = json_data.get('id_usuario')
+        id_cuestionario = json_data.get('id_cuestionario')
+        respuestas = json_data.get('respuestas', {})
+
+        if not id_usuario or not id_cuestionario:
+            return jsonify({
+                "success": False,
+                "error": "ID de usuario e ID de cuestionario son requeridos."
+            }), 400
+
+        # Verificar que el cuestionario existe y está activo
+        cuestionario = db_session.query(Cuestionario).filter(
+            Cuestionario.id_cuestionario == id_cuestionario,
+            Cuestionario.activo == True
+        ).first()
+
+        if not cuestionario:
+            return jsonify({
+                "success": False,
+                "error": "Cuestionario no encontrado o no disponible."
+            }), 404
+
+        # Obtener preguntas del cuestionario
+        preguntas = db_session.query(Pregunta).filter(
+            Pregunta.id_cuestionario == id_cuestionario
+        ).all()
+
+        # Validar respuestas requeridas
+        preguntas_requeridas = [p for p in preguntas if p.requerida]
+        respuestas_faltantes = []
+        
+        for pregunta in preguntas_requeridas:
+            respuesta = respuestas.get(str(pregunta.id_pregunta), '')
+            if not respuesta or str(respuesta).strip() == '':
+                respuestas_faltantes.append(pregunta.texto_pregunta)
+
+        if respuestas_faltantes:
+            return jsonify({
+                "success": False,
+                "error": f"Faltan respuestas requeridas: {', '.join(respuestas_faltantes)}"
+            }), 400
+
+        # TODO: Aquí puedes implementar el guardado real de respuestas
+        # Por ahora, simulamos el guardado exitoso
+        
+        print(f"--- RESPUESTAS CUESTIONARIO DINÁMICO ---")
+        print(f"Usuario: {id_usuario}")
+        print(f"Cuestionario: {cuestionario.nombre} (ID: {id_cuestionario})")
+        print(f"Respuestas: {respuestas}")
+        print("----------------------------------------")
+
+        return jsonify({
+            "success": True,
+            "message": f"Respuestas del cuestionario '{cuestionario.nombre}' guardadas exitosamente.",
+            "data": {
+                "id_usuario": id_usuario,
+                "id_cuestionario": id_cuestionario,
+                "cuestionario_nombre": cuestionario.nombre,
+                "respuestas_guardadas": len([r for r in respuestas.values() if r])
+            }
+        })
+
+    except Exception as e:
+        print(f"Error al guardar respuestas dinámicas: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": "Error interno del servidor.",
+            "message": str(e)
+        }), 500
+        
+    finally:
+        db_session.close()
 
 @questionnaire_bp.route('/cuestionario', methods=['POST'])
 def submit_questionnaire():

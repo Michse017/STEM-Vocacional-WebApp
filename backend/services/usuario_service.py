@@ -1,7 +1,7 @@
 from database.controller import get_usuario_by_codigo
 from database.models import Usuario
 from sqlalchemy.orm import Session
-from .questionnaire_service import obtener_respuestas_por_usuario
+from services.questionnaire_service import obtener_respuestas_por_usuario
 
 def validar_usuario_por_codigo(db_session: Session, codigo_estudiante: str) -> Usuario:
     """

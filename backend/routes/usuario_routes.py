@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from ..services.usuario_service import validar_usuario_por_codigo, obtener_respuestas_guardadas
+from services.usuario_service import validar_usuario_por_codigo, obtener_respuestas_guardadas
 from database.controller import SessionLocal
 import traceback
 

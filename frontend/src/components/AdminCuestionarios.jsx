@@ -35,7 +35,7 @@ const AdminCuestionarios = () => {
         try {
             setLoading(true);
             const baseUrl = getBaseUrl();
-            const response = await fetch(`${baseUrl}/api/admin/cuestionarios`);
+            const response = await fetch(`${baseUrl}/admin/cuestionarios`);
             const data = await response.json();
             
             if (data.success) {
@@ -100,8 +100,8 @@ const AdminCuestionarios = () => {
         try {
             const baseUrl = getBaseUrl();
             const url = modoEdicion 
-                ? `${baseUrl}/api/admin/cuestionarios/${cuestionarioSeleccionado.id_cuestionario}`
-                : `${baseUrl}/api/admin/cuestionarios`;
+                ? `${baseUrl}/admin/cuestionarios/${cuestionarioSeleccionado.id_cuestionario}`
+                : `${baseUrl}/admin/cuestionarios`;
             
             const method = modoEdicion ? 'PUT' : 'POST';
             
@@ -138,7 +138,7 @@ const AdminCuestionarios = () => {
 
         try {
             const baseUrl = getBaseUrl();
-            const response = await fetch(`${baseUrl}/api/admin/cuestionarios/${id}`, {
+            const response = await fetch(`${baseUrl}/admin/cuestionarios/${id}`, {
                 method: 'DELETE'
             });
             
@@ -162,7 +162,7 @@ const AdminCuestionarios = () => {
     const verDetalle = async (id) => {
         try {
             const baseUrl = getBaseUrl();
-            const response = await fetch(`${baseUrl}/api/admin/cuestionarios/${id}`);
+            const response = await fetch(`${baseUrl}/admin/cuestionarios/${id}`);
             const data = await response.json();
             
             if (data.success) {
