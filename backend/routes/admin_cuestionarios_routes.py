@@ -82,6 +82,7 @@ def crear_cuestionario(db_session):
     """Crea un nuevo cuestionario con preguntas opcionales."""
     try:
         data = request.get_json()
+        logger.info(f"Creando cuestionario con datos: {data}")
         
         # Validar datos requeridos
         if not data or not data.get('nombre'):
@@ -94,46 +95,77 @@ def crear_cuestionario(db_session):
             descripcion=data.get('descripcion'),
             tipo=data.get('tipo')
         )
+        logger.info(f"Cuestionario creado con ID: {cuestionario.id_cuestionario}")
         
         # Crear preguntas si las hay
         preguntas_creadas = []
         preguntas_data = data.get('preguntas', [])
+        logger.info(f"Procesando {len(preguntas_data)} preguntas")
+        
         if preguntas_data:
             pregunta_service = PreguntaService(db_session)
             
-            for pregunta_data in preguntas_data:
-                pregunta = pregunta_service.crear_pregunta(
-                    id_cuestionario=cuestionario.id_cuestionario,
-                    texto=pregunta_data['texto_pregunta'],
-                    tipo_pregunta=pregunta_data['tipo_pregunta'],
-                    requerida=pregunta_data.get('requerida', True),
-                    orden=pregunta_data.get('orden', 1)
-                )
-                
-                # Crear opciones si las hay
-                opciones_creadas = []
-                opciones_data = pregunta_data.get('opciones', [])
-                for opcion_data in opciones_data:
-                    opcion = pregunta_service.crear_opcion_pregunta(
-                        id_pregunta=pregunta.id_pregunta,
-                        texto=opcion_data['texto_opcion'],
-                        valor=opcion_data.get('valor'),
-                        orden=opcion_data.get('orden')
+            for i, pregunta_data in enumerate(preguntas_data):
+                try:
+                    logger.info(f"Creando pregunta {i+1}: {pregunta_data}")
+                    pregunta = pregunta_service.crear_pregunta(
+                        id_cuestionario=cuestionario.id_cuestionario,
+                        texto=pregunta_data['texto_pregunta'],
+                        tipo_pregunta=pregunta_data['tipo_pregunta'],
+                        requerida=pregunta_data.get('requerida', True),
+                        orden=pregunta_data.get('orden', i + 1),
+                        auto_commit=False  # No hacer commit hasta el final
                     )
-                    opciones_creadas.append({
-                        'id_opcion': opcion.id_opcion,
-                        'texto_opcion': opcion.texto,
-                        'valor': opcion.valor
+                    logger.info(f"Pregunta creada con ID: {pregunta.id_pregunta}")
+                    
+                    # Crear opciones si las hay
+                    opciones_creadas = []
+                    opciones_data = pregunta_data.get('opciones', [])
+                    logger.info(f"Procesando {len(opciones_data)} opciones para pregunta {pregunta.id_pregunta}")
+                    
+                    for j, opcion_data in enumerate(opciones_data):
+                        try:
+                            logger.info(f"Creando opción {j+1}: {opcion_data}")
+                            opcion = pregunta_service.crear_opcion_pregunta(
+                                id_pregunta=pregunta.id_pregunta,
+                                texto=opcion_data['texto_opcion'],
+                                valor=opcion_data.get('valor'),
+                                orden=opcion_data.get('orden', j + 1),
+                                auto_commit=False  # No hacer commit hasta el final
+                            )
+                            opciones_creadas.append({
+                                'id_opcion': opcion.id_opcion,
+                                'texto_opcion': opcion.texto,
+                                'valor': opcion.valor
+                            })
+                            logger.info(f"Opción creada con ID: {opcion.id_opcion}")
+                        except Exception as opcion_error:
+                            logger.error(f"Error al crear opción {j+1}: {str(opcion_error)}")
+                            raise opcion_error
+                    
+                    preguntas_creadas.append({
+                        'id_pregunta': pregunta.id_pregunta,
+                        'texto_pregunta': pregunta.texto,
+                        'tipo_pregunta': pregunta.tipo_pregunta,
+                        'requerida': pregunta.requerida,
+                        'orden': pregunta.orden,
+                        'opciones': opciones_creadas
                     })
-                
-                preguntas_creadas.append({
-                    'id_pregunta': pregunta.id_pregunta,
-                    'texto_pregunta': pregunta.texto,
-                    'tipo_pregunta': pregunta.tipo_pregunta,
-                    'requerida': pregunta.requerida,
-                    'orden': pregunta.orden,
-                    'opciones': opciones_creadas
-                })
+                    
+                except Exception as pregunta_error:
+                    logger.error(f"Error al crear pregunta {i+1}: {str(pregunta_error)}")
+                    raise pregunta_error
+            
+            # Hacer commit de todas las preguntas y opciones de una vez
+            try:
+                db_session.commit()
+                logger.info(f"Commit exitoso de {len(preguntas_creadas)} preguntas")
+            except Exception as commit_error:
+                logger.error(f"Error en commit de preguntas: {str(commit_error)}")
+                db_session.rollback()
+                raise commit_error
+        
+        logger.info(f"Cuestionario completado con {len(preguntas_creadas)} preguntas creadas")
         
         return jsonify({
             'success': True,
@@ -149,11 +181,10 @@ def crear_cuestionario(db_session):
         
     except Exception as e:
         logger.error(f"Error al crear cuestionario: {str(e)}")
-        return jsonify({'success': False, 'error': 'Error al crear cuestionario'}), 500
-        
-    except Exception as e:
-        logger.error(f"Error al crear cuestionario: {str(e)}")
-        return jsonify({'success': False, 'error': 'Error al crear cuestionario'}), 500
+        logger.error(f"Datos recibidos: {data if 'data' in locals() else 'No disponible'}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({'success': False, 'error': f'Error al crear cuestionario: {str(e)}'}), 500
 
 
 @admin_cuestionarios_bp.route('/cuestionarios/<int:id_cuestionario>', methods=['GET'])

@@ -151,14 +151,18 @@ const AdminCuestionarios = () => {
             
             const data = await response.json();
             
+            console.log('Respuesta del servidor:', data); // Debug
+            
             if (data.success) {
                 cerrarModal();
-                cargarCuestionarios(); // Recargar la lista
+                await cargarCuestionarios(); // Recargar la lista y esperar a que termine
                 const mensaje = data.mode === 'mock' 
                     ? `${modoEdicion ? 'Cuestionario actualizado' : 'Cuestionario creado'} (modo demostración)`
                     : `${modoEdicion ? 'Cuestionario actualizado' : 'Cuestionario creado'} exitosamente con ${preguntasFormulario.length} preguntas`;
                 alert(mensaje);
+                console.log('Cuestionario guardado:', data.data);
             } else {
+                console.error('Error del servidor:', data);
                 alert('Error: ' + data.error);
             }
         } catch (err) {

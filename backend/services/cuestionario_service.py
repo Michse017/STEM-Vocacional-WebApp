@@ -76,7 +76,7 @@ class PreguntaService:
         self.db = db_session
     
     def crear_pregunta(self, id_cuestionario: int, texto: str, tipo_pregunta: str, 
-                      requerida: bool = True, orden: int = None, **kwargs) -> Pregunta:
+                      requerida: bool = True, orden: int = None, auto_commit: bool = True, **kwargs) -> Pregunta:
         """Crea una nueva pregunta."""
         if orden is None:
             # Auto-asignar orden basado en preguntas existentes
@@ -94,8 +94,14 @@ class PreguntaService:
             **kwargs
         )
         self.db.add(pregunta)
-        self.db.commit()
-        self.db.refresh(pregunta)
+        
+        if auto_commit:
+            self.db.commit()
+            self.db.refresh(pregunta)
+        else:
+            self.db.flush()  # Solo flush para obtener el ID sin commit
+            self.db.refresh(pregunta)
+            
         return pregunta
     
     def obtener_preguntas_cuestionario(self, id_cuestionario: int) -> List[Pregunta]:
@@ -104,7 +110,7 @@ class PreguntaService:
             Pregunta.id_cuestionario == id_cuestionario
         ).order_by(Pregunta.orden).all()
     
-    def crear_opcion_pregunta(self, id_pregunta: int, texto: str, valor: str = None, orden: int = None) -> OpcionPregunta:
+    def crear_opcion_pregunta(self, id_pregunta: int, texto: str, valor: str = None, orden: int = None, auto_commit: bool = True) -> OpcionPregunta:
         """Crea una opción para una pregunta de selección."""
         if orden is None:
             max_orden = self.db.query(OpcionPregunta).filter(
@@ -122,8 +128,14 @@ class PreguntaService:
             orden=orden
         )
         self.db.add(opcion)
-        self.db.commit()
-        self.db.refresh(opcion)
+        
+        if auto_commit:
+            self.db.commit()
+            self.db.refresh(opcion)
+        else:
+            self.db.flush()  # Solo flush para obtener el ID sin commit
+            self.db.refresh(opcion)
+            
         return opcion
     
     def obtener_pregunta(self, id_pregunta: int) -> Pregunta:

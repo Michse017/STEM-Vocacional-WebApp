@@ -38,17 +38,32 @@ const GestionPreguntas = ({ cuestionario, onClose }) => {
         try {
             setLoading(true);
             const baseUrl = getBaseUrl();
+            console.log('Cargando preguntas para cuestionario:', cuestionario.id_cuestionario);
             const response = await fetch(`${baseUrl}/admin/cuestionarios/${cuestionario.id_cuestionario}`);
             const data = await response.json();
             
+            console.log('Respuesta completa del servidor:', data);
+            
             if (data.success) {
-                setPreguntas(data.data.preguntas || []);
+                console.log('Preguntas recibidas del servidor:', data.data.preguntas);
+                // Mapear los campos para que coincidan con lo esperado en el frontend
+                const preguntasMapeadas = (data.data.preguntas || []).map(pregunta => ({
+                    ...pregunta,
+                    texto_pregunta: pregunta.texto || pregunta.texto_pregunta,
+                    opciones: (pregunta.opciones || []).map(opcion => ({
+                        ...opcion,
+                        texto_opcion: opcion.texto || opcion.texto_opcion
+                    }))
+                }));
+                console.log('Preguntas mapeadas:', preguntasMapeadas);
+                setPreguntas(preguntasMapeadas);
             } else {
-                setError('Error al cargar preguntas');
+                console.error('Error en la respuesta:', data.error);
+                setError('Error al cargar preguntas: ' + (data.error || 'Error desconocido'));
             }
         } catch (err) {
             setError('Error de conexión');
-            console.error('Error:', err);
+            console.error('Error completo al cargar preguntas:', err);
         } finally {
             setLoading(false);
         }
