@@ -38,9 +38,16 @@ def create_app():
             'https://estem-iota.vercel.app',
             "http://localhost:3000",
         ]
-        CORS(app, resources={r"/api/*": {"origins": allowed_origins}}, supports_credentials=True)
+        # Configurar CORS para todas las rutas (/api/* y /admin/*)
+        CORS(app, resources={
+            r"/api/*": {"origins": allowed_origins}, 
+            r"/admin/*": {"origins": allowed_origins}
+        }, supports_credentials=True)
     else:
-        CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
+        CORS(app, resources={
+            r"/api/*": {"origins": "http://localhost:3000"},
+            r"/admin/*": {"origins": "http://localhost:3000"}
+        }, supports_credentials=True)
 
     # Registrar blueprints
     app.register_blueprint(usuario_bp, url_prefix='/api')
@@ -48,7 +55,7 @@ def create_app():
 
     # Registrar rutas de administración solo si están disponibles
     if ADMIN_ROUTES_AVAILABLE:
-        app.register_blueprint(admin_cuestionarios_bp, url_prefix='/api')
+        app.register_blueprint(admin_cuestionarios_bp, url_prefix='/api/admin')
         print("✅ Rutas de administración registradas")
     else:
         print("⚠️  Rutas de administración no registradas")
