@@ -40,13 +40,29 @@ def create_app():
         ]
         # Configurar CORS para todas las rutas (/api/* y /admin/*)
         CORS(app, resources={
-            r"/api/*": {"origins": allowed_origins}, 
-            r"/admin/*": {"origins": allowed_origins}
+            r"/api/*": {
+                "origins": allowed_origins,
+                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"]
+            }, 
+            r"/admin/*": {
+                "origins": allowed_origins,
+                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"]
+            }
         }, supports_credentials=True)
     else:
         CORS(app, resources={
-            r"/api/*": {"origins": "http://localhost:3000"},
-            r"/admin/*": {"origins": "http://localhost:3000"}
+            r"/api/*": {
+                "origins": "http://localhost:3000",
+                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"]
+            },
+            r"/admin/*": {
+                "origins": "http://localhost:3000",
+                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"], 
+                "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"]
+            }
         }, supports_credentials=True)
 
     # Registrar blueprints

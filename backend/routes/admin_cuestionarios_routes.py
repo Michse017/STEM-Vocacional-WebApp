@@ -13,7 +13,7 @@ import logging
 # Agregar el directorio padre al path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from database.controller import engine
+from database.controller import engine, is_database_available
 from database.models import Cuestionario, Pregunta, OpcionPregunta
 from backend.services.cuestionario_service import CuestionarioService, PreguntaService, RespuestaService
 
@@ -29,23 +29,70 @@ Session = sessionmaker(bind=engine)
 
 def get_db_session():
     """Obtiene una sesión de base de datos."""
+    if not is_database_available():
+        return None
     return Session()
+
+def require_database(f):
+    """Decorador que verifica que la base de datos esté disponible."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not is_database_available():
+            return jsonify({
+                'success': False,
+                'error': 'Servicio temporalmente no disponible',
+                'message': 'La base de datos no está disponible. Por favor, intenta más tarde.',
+                'database_status': 'unavailable'
+            }), 503
+        return f(*args, **kwargs)
+    return decorated_function
 
 def handle_db_session(f):
     """Decorador para manejar sesiones de base de datos."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         db_session = get_db_session()
+        if db_session is None:
+            return jsonify({
+                'success': False,
+                'error': 'Base de datos no disponible',
+                'database_status': 'unavailable'
+            }), 503
+            
         try:
             return f(db_session, *args, **kwargs)
         except Exception as e:
             db_session.rollback()
             logger.error(f"Error en {f.__name__}: {str(e)}")
-            return jsonify({'error': 'Error interno del servidor'}), 500
+            return jsonify({'success': False, 'error': 'Error interno del servidor'}), 500
         finally:
             db_session.close()
     return decorated_function
 
+
+# ============================================================================
+# ENDPOINTS DE ESTADO Y DIAGNÓSTICO
+# ============================================================================
+
+@admin_cuestionarios_bp.route('/status', methods=['GET'])
+def admin_status():
+    """Endpoint para verificar el estado de las rutas de administración."""
+    db_available = is_database_available()
+    return jsonify({
+        'service': 'admin-cuestionarios',
+        'status': 'healthy',
+        'database_available': db_available,
+        'database_status': 'available' if db_available else 'unavailable',
+        'admin_routes_enabled': True,
+        'version': '2.0.0',
+        'environment': os.environ.get('FLASK_ENV', 'development'),
+        'endpoints': [
+            '/cuestionarios',
+            '/cuestionarios/<id>/preguntas',
+            '/cuestionarios/<id>/preguntas/<id_pregunta>',
+            '/status'
+        ]
+    }), 200 if db_available else 503
 
 # ============================================================================
 # ENDPOINTS PARA CUESTIONARIOS
