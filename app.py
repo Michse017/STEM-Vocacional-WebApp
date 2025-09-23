@@ -32,12 +32,14 @@ def create_app():
         allowed_origins = [
             os.environ.get('FRONTEND_URL', 'https://stem-vocacional-webapp.vercel.app'),
             'https://stem-vocacional-web-app.vercel.app',
+            'https://stem-vocacional-webapp.vercel.app',
             'https://estem-iota.vercel.app',
             "http://localhost:3000",
+            "https://localhost:3000",
         ]
         CORS(app, resources={r"/api/*": {"origins": allowed_origins}}, supports_credentials=True)
     else:
-        CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
+        CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
     # Registrar blueprints
     app.register_blueprint(usuario_bp, url_prefix='/api')
