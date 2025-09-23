@@ -22,7 +22,8 @@ const AdminCuestionarios = () => {
         if (process.env.NODE_ENV === 'development') {
             return 'http://localhost:5000';
         }
-        return '/api'; // En producción, usar rutas relativas
+        // En producción, usar la URL completa del backend en Render
+        return 'https://stem-backend-9sc0.onrender.com';
     };
 
     // Cargar cuestionarios al montar el componente
