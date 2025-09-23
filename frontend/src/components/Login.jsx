@@ -19,15 +19,25 @@ export default function Login() {
 
     try {
       const usuario = await crearOObtenerUsuario(codigoEstudiante)
+      if (!usuario || !usuario.id_usuario) {
+        throw new Error("El código ingresado no está registrado.")
+      }
       const respuestasGuardadas = await obtenerRespuestas(usuario.id_usuario)
-
       if (respuestasGuardadas) {
         navigate("/dashboard", { state: { usuario, respuestas: respuestasGuardadas } })
       } else {
         navigate("/cuestionario", { state: { usuario } })
       }
     } catch (err) {
-      setError(err.message || "Ocurrió un error al iniciar sesión.")
+      // Mensajes claros para códigos inexistentes
+      const msg = String(err.message || "Ocurrió un error al iniciar sesión.")
+      if (!codigoEstudiante.trim()) {
+        setError("Por favor, ingresa tu código de estudiante.")
+      } else if (msg.toLowerCase().includes('no está registrado') || msg.includes('404')) {
+        setError('El código ingresado no está registrado. Verifica e intenta nuevamente.')
+      } else {
+        setError(msg)
+      }
       setLoading(false)
     }
   }

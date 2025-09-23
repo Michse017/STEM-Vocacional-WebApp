@@ -5,14 +5,19 @@ const totalPreguntas = secciones.reduce((total, seccion) => {
   return total + seccion.preguntas.length
 }, 0)
 
-const totalPreguntasSocio = secciones.find((s) => s.id === "sociodemografica")?.preguntas.length || 0
-const totalPreguntasIntel = secciones.find((s) => s.id === "inteligencias_multiples")?.preguntas.length || 0
+const socioConfig = secciones.find((s) => s.id === "sociodemografica")
+const intelConfig = secciones.find((s) => s.id === "inteligencias_multiples")
+const socioIds = (socioConfig?.preguntas || []).map((p) => p.id)
+const intelIds = (intelConfig?.preguntas || []).map((p) => p.id)
+const totalPreguntasSocio = socioIds.length
+const totalPreguntasIntel = intelIds.length
 
 export default function Dashboard() {
   const location = useLocation()
   const navigate = useNavigate()
 
   const { usuario, respuestas } = location.state || {}
+  const finalizado = Boolean(usuario?.finalizado || respuestas?.finalizado)
 
   const handleLogout = () => {
     navigate("/login", { replace: true })
@@ -50,14 +55,21 @@ export default function Dashboard() {
   const respuestasSocio = respuestas.sociodemografica || {}
   const respuestasIntel = respuestas.inteligencias_multiples || {}
 
-  const completadoSocio = Object.values(respuestasSocio).filter((v) => v !== null && v !== "").length
-  const progresoSocio = totalPreguntasSocio > 0 ? Math.round((completadoSocio / totalPreguntasSocio) * 100) : 0
+  // Contar solo las preguntas configuradas (excluye campos auxiliares como "otro_*")
+  const completadoSocio = socioIds.filter((id) => {
+    const v = respuestasSocio[id]
+    return v !== null && v !== undefined && v !== ""
+  }).length
+  const progresoSocio = totalPreguntasSocio > 0 ? Math.min(100, Math.round((completadoSocio / totalPreguntasSocio) * 100)) : 0
 
-  const completadoIntel = Object.values(respuestasIntel).filter((v) => v !== null && v !== "").length
-  const progresoIntel = totalPreguntasIntel > 0 ? Math.round((completadoIntel / totalPreguntasIntel) * 100) : 0
+  const completadoIntel = intelIds.filter((id) => {
+    const v = respuestasIntel[id]
+    return v !== null && v !== undefined && v !== ""
+  }).length
+  const progresoIntel = totalPreguntasIntel > 0 ? Math.min(100, Math.round((completadoIntel / totalPreguntasIntel) * 100)) : 0
 
   const completadoTotal = completadoSocio + completadoIntel
-  const progresoTotal = totalPreguntas > 0 ? Math.round((completadoTotal / totalPreguntas) * 100) : 0
+  const progresoTotal = totalPreguntas > 0 ? Math.min(100, Math.round((completadoTotal / totalPreguntas) * 100)) : 0
 
   return (
     <div
@@ -287,7 +299,7 @@ export default function Dashboard() {
               />
               <path d="M9.5 7H14.5M9.5 11H14.5M9.5 15H11.5" stroke="currentColor" strokeWidth="2" />
             </svg>
-            {progresoTotal === 100 ? "Revisar Cuestionario" : "Continuar Cuestionario"}
+            {finalizado ? "Revisar (solo lectura)" : progresoTotal === 100 ? "Revisar Cuestionario" : "Continuar Cuestionario"}
           </button>
           <button onClick={handleLogout} className="btn btn-secondary">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

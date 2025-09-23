@@ -22,7 +22,8 @@ def login_usuario():
         
         return jsonify({
             "id_usuario": usuario.id_usuario,
-            "codigo_estudiante": usuario.codigo_estudiante
+            "codigo_estudiante": usuario.codigo_estudiante,
+            "finalizado": getattr(usuario, 'finalizado', False)
         }), 200
     except ValueError as e:
         return jsonify({"error": str(e)}), 404
