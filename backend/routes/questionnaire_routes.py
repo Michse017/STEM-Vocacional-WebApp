@@ -1,7 +1,10 @@
 from flask import Blueprint, jsonify, request
 from pydantic import ValidationError
-from schemas.questionnaire_schemas import CuestionarioCompletoSchema
-from services.questionnaire_service import guardar_respuestas_cuestionario, finalizar_cuestionario
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from backend.schemas.questionnaire_schemas import CuestionarioCompletoSchema
+from backend.services.questionnaire_service import guardar_respuestas_cuestionario, finalizar_cuestionario
 from database.controller import SessionLocal
 from database.models import Cuestionario, Pregunta, OpcionPregunta
 import traceback

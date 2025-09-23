@@ -1,5 +1,8 @@
 from flask import Blueprint, request, jsonify
-from services.usuario_service import validar_usuario_por_codigo, obtener_respuestas_guardadas
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from backend.services.usuario_service import validar_usuario_por_codigo, obtener_respuestas_guardadas
 from database.controller import SessionLocal
 import traceback
 

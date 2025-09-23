@@ -1,6 +1,9 @@
 from sqlalchemy.orm import Session
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from database import controller as db_controller
-from schemas.questionnaire_schemas import (
+from backend.schemas.questionnaire_schemas import (
     CuestionarioCompletoSchema,
     SociodemograficaSchema,
     InteligenciasMultiplesSchema,
