@@ -219,13 +219,13 @@ def crear_pregunta(db_session, id_cuestionario):
         data = request.get_json()
         
         # Validar datos requeridos
-        if not data or not data.get('texto') or not data.get('tipo_pregunta'):
+        if not data or not data.get('texto_pregunta') or not data.get('tipo_pregunta'):
             return jsonify({'success': False, 'error': 'Texto y tipo de pregunta son requeridos'}), 400
         
         service = PreguntaService(db_session)
         pregunta = service.crear_pregunta(
             id_cuestionario=id_cuestionario,
-            texto=data['texto'],
+            texto=data['texto_pregunta'],
             tipo_pregunta=data['tipo_pregunta'],
             requerida=data.get('requerida', True),
             orden=data.get('orden'),
@@ -240,7 +240,7 @@ def crear_pregunta(db_session, id_cuestionario):
         for opcion_data in opciones:
             service.crear_opcion_pregunta(
                 id_pregunta=pregunta.id_pregunta,
-                texto=opcion_data['texto'],
+                texto=opcion_data['texto_opcion'],
                 valor=opcion_data.get('valor'),
                 orden=opcion_data.get('orden')
             )
@@ -249,7 +249,7 @@ def crear_pregunta(db_session, id_cuestionario):
             'success': True,
             'data': {
                 'id_pregunta': pregunta.id_pregunta,
-                'texto': pregunta.texto,
+                'texto_pregunta': pregunta.texto,
                 'tipo_pregunta': pregunta.tipo_pregunta,
                 'requerida': pregunta.requerida,
                 'orden': pregunta.orden
@@ -259,6 +259,105 @@ def crear_pregunta(db_session, id_cuestionario):
     except Exception as e:
         logger.error(f"Error al crear pregunta: {str(e)}")
         return jsonify({'success': False, 'error': 'Error al crear pregunta'}), 500
+
+
+@admin_cuestionarios_bp.route('/cuestionarios/<int:id_cuestionario>/preguntas/<int:id_pregunta>', methods=['PUT'])
+@handle_db_session
+def actualizar_pregunta(db_session, id_cuestionario, id_pregunta):
+    """Actualiza una pregunta existente."""
+    try:
+        data = request.get_json()
+        
+        # Validar datos requeridos
+        if not data:
+            return jsonify({'success': False, 'error': 'No se proporcionaron datos'}), 400
+        
+        service = PreguntaService(db_session)
+        
+        # Verificar que la pregunta existe
+        pregunta = service.obtener_pregunta(id_pregunta)
+        if not pregunta or pregunta.id_cuestionario != id_cuestionario:
+            return jsonify({'success': False, 'error': 'Pregunta no encontrada'}), 404
+        
+        # Actualizar pregunta
+        pregunta_actualizada = service.actualizar_pregunta(
+            id_pregunta=id_pregunta,
+            texto=data.get('texto_pregunta', pregunta.texto),
+            tipo_pregunta=data.get('tipo_pregunta', pregunta.tipo_pregunta),
+            requerida=data.get('requerida', pregunta.requerida),
+            orden=data.get('orden', pregunta.orden),
+            min_valor=data.get('min_valor', pregunta.min_valor),
+            max_valor=data.get('max_valor', pregunta.max_valor),
+            patron_validacion=data.get('patron_validacion', pregunta.patron_validacion),
+            ayuda_texto=data.get('ayuda_texto', pregunta.ayuda_texto)
+        )
+        
+        # Actualizar opciones si las hay
+        opciones = data.get('opciones', [])
+        if opciones is not None:
+            # Primero eliminar opciones existentes
+            service.eliminar_opciones_pregunta(id_pregunta)
+            
+            # Crear nuevas opciones
+            for opcion_data in opciones:
+                if isinstance(opcion_data, dict) and 'texto_opcion' in opcion_data:
+                    service.crear_opcion_pregunta(
+                        id_pregunta=id_pregunta,
+                        texto=opcion_data['texto_opcion'],
+                        valor=opcion_data.get('valor'),
+                        orden=opcion_data.get('orden')
+                    )
+        
+        # Obtener opciones actualizadas
+        opciones_actualizadas = service.obtener_opciones_pregunta(id_pregunta)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'id_pregunta': pregunta_actualizada.id_pregunta,
+                'texto_pregunta': pregunta_actualizada.texto,
+                'tipo_pregunta': pregunta_actualizada.tipo_pregunta,
+                'requerida': pregunta_actualizada.requerida,
+                'orden': pregunta_actualizada.orden,
+                'opciones': [{
+                    'id_opcion': op.id_opcion,
+                    'texto_opcion': op.texto,
+                    'valor': op.valor
+                } for op in opciones_actualizadas]
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error al actualizar pregunta: {str(e)}")
+        return jsonify({'success': False, 'error': 'Error al actualizar pregunta'}), 500
+
+
+@admin_cuestionarios_bp.route('/cuestionarios/<int:id_cuestionario>/preguntas/<int:id_pregunta>', methods=['DELETE'])
+@handle_db_session
+def eliminar_pregunta(db_session, id_cuestionario, id_pregunta):
+    """Elimina una pregunta existente."""
+    try:
+        service = PreguntaService(db_session)
+        
+        # Verificar que la pregunta existe
+        pregunta = service.obtener_pregunta(id_pregunta)
+        if not pregunta or pregunta.id_cuestionario != id_cuestionario:
+            return jsonify({'success': False, 'error': 'Pregunta no encontrada'}), 404
+        
+        # Eliminar la pregunta (esto también eliminará las opciones por CASCADE)
+        success = service.eliminar_pregunta(id_pregunta)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Pregunta eliminada correctamente'
+            })
+        else:
+            return jsonify({'success': False, 'error': 'No se pudo eliminar la pregunta'}), 500
+        
+    except Exception as e:
+        logger.error(f"Error al eliminar pregunta: {str(e)}")
+        return jsonify({'success': False, 'error': 'Error al eliminar pregunta'}), 500
 
 
 # ============================================================================

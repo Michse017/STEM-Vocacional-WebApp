@@ -125,6 +125,61 @@ class PreguntaService:
         self.db.commit()
         self.db.refresh(opcion)
         return opcion
+    
+    def obtener_pregunta(self, id_pregunta: int) -> Pregunta:
+        """Obtiene una pregunta específica por ID."""
+        return self.db.query(Pregunta).filter(Pregunta.id_pregunta == id_pregunta).first()
+    
+    def actualizar_pregunta(self, id_pregunta: int, texto: str = None, tipo_pregunta: str = None, 
+                           requerida: bool = None, orden: int = None, **kwargs) -> Pregunta:
+        """Actualiza una pregunta existente."""
+        pregunta = self.obtener_pregunta(id_pregunta)
+        if not pregunta:
+            return None
+        
+        if texto is not None:
+            pregunta.texto = texto
+        if tipo_pregunta is not None:
+            pregunta.tipo_pregunta = tipo_pregunta
+        if requerida is not None:
+            pregunta.requerida = requerida
+        if orden is not None:
+            pregunta.orden = orden
+        
+        # Actualizar campos adicionales si se proporcionan
+        for key, value in kwargs.items():
+            if hasattr(pregunta, key) and value is not None:
+                setattr(pregunta, key, value)
+        
+        self.db.commit()
+        self.db.refresh(pregunta)
+        return pregunta
+    
+    def eliminar_pregunta(self, id_pregunta: int) -> bool:
+        """Elimina una pregunta y todas sus opciones asociadas."""
+        pregunta = self.obtener_pregunta(id_pregunta)
+        if not pregunta:
+            return False
+        
+        # Primero eliminar todas las opciones asociadas
+        self.db.query(OpcionPregunta).filter(OpcionPregunta.id_pregunta == id_pregunta).delete()
+        
+        # Luego eliminar la pregunta
+        self.db.delete(pregunta)
+        self.db.commit()
+        return True
+    
+    def obtener_opciones_pregunta(self, id_pregunta: int) -> List[OpcionPregunta]:
+        """Obtiene todas las opciones de una pregunta."""
+        return self.db.query(OpcionPregunta).filter(
+            OpcionPregunta.id_pregunta == id_pregunta
+        ).order_by(OpcionPregunta.orden).all()
+    
+    def eliminar_opciones_pregunta(self, id_pregunta: int) -> bool:
+        """Elimina todas las opciones de una pregunta."""
+        count = self.db.query(OpcionPregunta).filter(OpcionPregunta.id_pregunta == id_pregunta).delete()
+        self.db.commit()
+        return count > 0
 
 
 class RespuestaService:

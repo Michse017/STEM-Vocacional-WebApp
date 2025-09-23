@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './AdminCuestionarios.css';
+import GestionPreguntas from './GestionPreguntas';
 
 const AdminCuestionarios = () => {
     const [cuestionarios, setCuestionarios] = useState([]);
@@ -8,6 +9,8 @@ const AdminCuestionarios = () => {
     const [modalAbierto, setModalAbierto] = useState(false);
     const [cuestionarioSeleccionado, setCuestionarioSeleccionado] = useState(null);
     const [modoEdicion, setModoEdicion] = useState(false);
+    const [gestionPreguntasAbierto, setGestionPreguntasAbierto] = useState(false);
+    const [cuestionarioPreguntasSeleccionado, setCuestionarioPreguntasSeleccionado] = useState(null);
     const [modo, setModo] = useState('unknown'); // 'mock', 'database', 'unknown'
 
     // Estados para el formulario
@@ -173,7 +176,10 @@ const AdminCuestionarios = () => {
                         .join('\n');
                     alert(`Preguntas en "${data.data.nombre}":\n\n${preguntasTexto}`);
                 } else {
-                    alert('Este cuestionario no tiene preguntas aún.\n\nLa funcionalidad para agregar preguntas estará disponible en la próxima actualización.');
+                    const verPreguntas = (cuestionario) => {
+        setCuestionarioPreguntasSeleccionado(cuestionario);
+        setGestionPreguntasAbierto(true);
+    };
                 }
             }
         } catch (err) {
@@ -345,6 +351,17 @@ const AdminCuestionarios = () => {
                         </form>
                     </div>
                 </div>
+            )}
+
+            {/* Modal de gestión de preguntas */}
+            {gestionPreguntasAbierto && cuestionarioPreguntasSeleccionado && (
+                <GestionPreguntas
+                    cuestionario={cuestionarioPreguntasSeleccionado}
+                    onClose={() => {
+                        setGestionPreguntasAbierto(false);
+                        setCuestionarioPreguntasSeleccionado(null);
+                    }}
+                />
             )}
         </div>
     );

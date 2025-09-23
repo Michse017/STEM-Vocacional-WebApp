@@ -19,7 +19,7 @@ from backend.routes.questionnaire_routes import questionnaire_bp
 
 # Intentar importar rutas de administración
 try:
-    from backend.routes.admin_cuestionarios_routes_v2 import admin_cuestionarios_bp
+    from backend.routes.admin_cuestionarios_routes import admin_cuestionarios_bp
     ADMIN_ROUTES_AVAILABLE = True
 except ImportError:
     print("⚠️  Rutas de administración no disponibles")
