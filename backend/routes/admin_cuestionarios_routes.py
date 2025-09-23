@@ -14,6 +14,7 @@ import logging
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from database.controller import engine, is_database_available
+from database.config import SessionLocal
 from database.models import Cuestionario, Pregunta, OpcionPregunta
 from backend.services.cuestionario_service import CuestionarioService, PreguntaService, RespuestaService
 
@@ -51,15 +52,30 @@ def handle_db_session(f):
     """Decorador para manejar sesiones de base de datos."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # DEBUG: Agregar logging detallado
+        logger.info(f"=== DEBUG handle_db_session ===")
+        logger.info(f"is_database_available(): {is_database_available()}")
+        logger.info(f"engine: {engine}")
+        logger.info(f"SessionLocal: {SessionLocal}")
+        
         db_session = get_db_session()
+        logger.info(f"get_db_session() returned: {db_session}")
+        
         if db_session is None:
+            logger.error("DB Session es None - retornando 503")
             return jsonify({
                 'success': False,
                 'error': 'Base de datos no disponible',
-                'database_status': 'unavailable'
+                'database_status': 'unavailable',
+                'debug': {
+                    'engine': str(engine),
+                    'sessionlocal': str(SessionLocal),
+                    'is_available': is_database_available()
+                }
             }), 503
             
         try:
+            logger.info(f"Ejecutando función {f.__name__} con db_session: {db_session}")
             return f(db_session, *args, **kwargs)
         except Exception as e:
             db_session.rollback()
