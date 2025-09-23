@@ -26,7 +26,7 @@ class CuestionarioService:
     def __init__(self, db_session: Session):
         self.db = db_session
     
-    def crear_cuestionario(self, nombre: str, descripcion: str = None, tipo: str = None) -> Cuestionario:
+    def crear_cuestionario(self, nombre: str, descripcion: str = None, tipo: str = None, auto_commit: bool = True) -> Cuestionario:
         """Crea un nuevo cuestionario."""
         cuestionario = Cuestionario(
             nombre=nombre,
@@ -35,8 +35,14 @@ class CuestionarioService:
             activo=True
         )
         self.db.add(cuestionario)
-        self.db.commit()
-        self.db.refresh(cuestionario)
+        
+        if auto_commit:
+            self.db.commit()
+            self.db.refresh(cuestionario)
+        else:
+            self.db.flush()  # Solo flush para obtener el ID sin commit
+            self.db.refresh(cuestionario)
+            
         return cuestionario
     
     def obtener_cuestionarios_activos(self) -> List[Cuestionario]:

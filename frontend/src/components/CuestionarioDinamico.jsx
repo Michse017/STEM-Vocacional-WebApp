@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 
 const CuestionarioDinamico = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const { id } = useParams(); // Obtener el ID de la URL
     const { usuario, cuestionario } = location.state || {};
     
     const [cuestionarioCompleto, setCuestionarioCompleto] = useState(null);
@@ -22,18 +23,25 @@ const CuestionarioDinamico = () => {
     };
 
     useEffect(() => {
-        if (!usuario || !cuestionario) {
-            navigate('/dashboard-cuestionarios', { state: { usuario } });
+        if (!usuario) {
+            navigate('/dashboard-cuestionarios');
             return;
         }
         cargarCuestionarioCompleto();
-    }, [usuario, cuestionario, navigate]);
+    }, [usuario, id, navigate]);
 
     const cargarCuestionarioCompleto = async () => {
         try {
             setLoading(true);
             const backendUrl = getBackendUrl();
-            const response = await fetch(`${backendUrl}/api/cuestionarios/${cuestionario.id_cuestionario}`);
+            // Usar el ID de la URL o el ID del cuestionario del state
+            const cuestionarioId = id || (cuestionario && cuestionario.id_cuestionario);
+            
+            if (!cuestionarioId) {
+                throw new Error('ID de cuestionario no encontrado');
+            }
+            
+            const response = await fetch(`${backendUrl}/api/admin/cuestionarios/${cuestionarioId}`);
             
             if (!response.ok) {
                 throw new Error(`Error ${response.status}: ${response.statusText}`);

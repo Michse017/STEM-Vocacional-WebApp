@@ -53,7 +53,7 @@ const SeleccionCuestionarios = () => {
 
     const seleccionarCuestionario = (cuestionario) => {
         // Navegar al cuestionario específico
-        navigate('/cuestionario-dinamico', { 
+        navigate(`/cuestionario-dinamico/${cuestionario.id_cuestionario}`, { 
             state: { 
                 usuario, 
                 cuestionario 

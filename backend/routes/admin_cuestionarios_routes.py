@@ -59,6 +59,9 @@ def listar_cuestionarios(db_session):
         service = CuestionarioService(db_session)
         cuestionarios = service.obtener_cuestionarios_activos()
         
+        # También obtener el servicio de preguntas para contar preguntas
+        pregunta_service = PreguntaService(db_session)
+        
         return jsonify({
             'success': True,
             'data': [{
@@ -68,7 +71,8 @@ def listar_cuestionarios(db_session):
                 'tipo': c.tipo,
                 'activo': c.activo,
                 'fecha_creacion': c.fecha_creacion.isoformat() if c.fecha_creacion else None,
-                'fecha_actualizacion': c.fecha_actualizacion.isoformat() if c.fecha_actualizacion else None
+                'fecha_actualizacion': c.fecha_actualizacion.isoformat() if c.fecha_actualizacion else None,
+                'num_preguntas': len(pregunta_service.obtener_preguntas_cuestionario(c.id_cuestionario))
             } for c in cuestionarios]
         })
     except Exception as e:
@@ -93,7 +97,8 @@ def crear_cuestionario(db_session):
         cuestionario = cuestionario_service.crear_cuestionario(
             nombre=data['nombre'],
             descripcion=data.get('descripcion'),
-            tipo=data.get('tipo')
+            tipo=data.get('tipo'),
+            auto_commit=False  # No hacer commit hasta el final
         )
         logger.info(f"Cuestionario creado con ID: {cuestionario.id_cuestionario}")
         
@@ -164,6 +169,15 @@ def crear_cuestionario(db_session):
                 logger.error(f"Error en commit de preguntas: {str(commit_error)}")
                 db_session.rollback()
                 raise commit_error
+        else:
+            # Si no hay preguntas, hacer commit solo del cuestionario
+            try:
+                db_session.commit()
+                logger.info(f"Commit exitoso del cuestionario sin preguntas")
+            except Exception as commit_error:
+                logger.error(f"Error en commit de cuestionario: {str(commit_error)}")
+                db_session.rollback()
+                raise commit_error
         
         logger.info(f"Cuestionario completado con {len(preguntas_creadas)} preguntas creadas")
         
@@ -192,15 +206,21 @@ def crear_cuestionario(db_session):
 def obtener_cuestionario(db_session, id_cuestionario):
     """Obtiene un cuestionario específico con sus preguntas."""
     try:
+        logger.info(f"Consultando cuestionario ID: {id_cuestionario}")
         cuestionario_service = CuestionarioService(db_session)
         pregunta_service = PreguntaService(db_session)
         
         cuestionario = cuestionario_service.obtener_cuestionario_por_id(id_cuestionario)
         
         if not cuestionario:
+            logger.warning(f"Cuestionario {id_cuestionario} no encontrado")
             return jsonify({'success': False, 'error': 'Cuestionario no encontrado'}), 404
         
         preguntas = pregunta_service.obtener_preguntas_cuestionario(id_cuestionario)
+        logger.info(f"Encontradas {len(preguntas)} preguntas para cuestionario {id_cuestionario}")
+        
+        for i, p in enumerate(preguntas):
+            logger.info(f"Pregunta {i+1}: ID={p.id_pregunta}, Texto='{p.texto[:50]}...', Tipo={p.tipo_pregunta}")
         
         return jsonify({
             'success': True,
@@ -231,6 +251,8 @@ def obtener_cuestionario(db_session, id_cuestionario):
         
     except Exception as e:
         logger.error(f"Error al obtener cuestionario: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'success': False, 'error': 'Error al obtener cuestionario'}), 500
 
 
