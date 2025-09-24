@@ -95,7 +95,7 @@ def obtener_cuestionario_usuario(id_cuestionario):
             
             opciones_data = [{
                 'id_opcion': opcion.id_opcion,
-                'texto_opcion': opcion.texto_opcion,
+                'texto_opcion': opcion.texto,
                 'valor': opcion.valor,
                 'orden': opcion.orden
             } for opcion in opciones]
