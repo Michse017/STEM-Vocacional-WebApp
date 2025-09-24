@@ -41,7 +41,7 @@ const CuestionarioDinamico = () => {
                 throw new Error('ID de cuestionario no encontrado');
             }
             
-            const response = await fetch(`${backendUrl}/api/admin/cuestionarios/${cuestionarioId}`);
+            const response = await fetch(`${backendUrl}/api/cuestionarios/${cuestionarioId}`);
             
             if (!response.ok) {
                 throw new Error(`Error ${response.status}: ${response.statusText}`);
