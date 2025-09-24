@@ -102,7 +102,7 @@ def obtener_cuestionario_usuario(id_cuestionario):
             
             preguntas_data.append({
                 'id_pregunta': pregunta.id_pregunta,
-                'texto_pregunta': pregunta.texto_pregunta,
+                'texto_pregunta': pregunta.texto,
                 'tipo_pregunta': pregunta.tipo_pregunta,
                 'orden': pregunta.orden,
                 'requerida': pregunta.requerida,
