@@ -111,6 +111,25 @@ main {
   box-shadow: 0 8px 20px rgba(72, 187, 120, 0.4);
 }
 
+/* Danger button variant for admin destructive actions */
+.btn-danger {
+  background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(229, 62, 62, 0.3);
+}
+
+.btn-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(229, 62, 62, 0.4);
+}
+
+/* Small button size used in admin */
+.btn-sm {
+  padding: 0.5rem 0.85rem;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
 /* Inputs y selects mejorados con mejor diseño y consistencia */
 .form-control,
 select {

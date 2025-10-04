@@ -1,0 +1,15 @@
+.admin-layout { display: grid; gap: 1.5rem; padding: 1.25rem; }
+.admin-grid { display: grid; gap: 1.5rem; }
+.admin-h2 { font-size: 1.05rem; margin: 0 0 .5rem; }
+.admin-error { color: crimson; font-size: .85rem; }
+.q-list { list-style: none; padding: 0; margin: 0; display: grid; gap: .6rem; }
+.q-item { border: 1px solid var(--border); background: var(--background); border-radius: 12px; padding: .75rem .9rem; box-shadow: 0 2px 8px var(--shadow); }
+.q-row { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+.q-meta { display: flex; flex-direction: column; }
+.q-code { font-size: 14px; font-weight: 600; }
+.q-title { font-size: 12px; color: var(--text-muted); }
+.q-actions { display: flex; gap: .4rem; align-items: center; }
+.version-chips { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--surface); border:1px solid var(--border); }
+.badge-draft { background: #fff4cf; border-color: #ffe08a; }
+.badge-published { background: #d9f7d9; border-color: #a7e8a7; }

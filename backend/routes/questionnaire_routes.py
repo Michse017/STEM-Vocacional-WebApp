@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
 from pydantic import ValidationError
 from ..schemas.questionnaire_schemas import CuestionarioCompletoSchema
-from ..services.questionnaire_service import guardar_respuestas_cuestionario, finalizar_cuestionario
+from backend.services.questionnaire_service import guardar_respuestas_cuestionario, finalizar_cuestionario
 from database.controller import SessionLocal
 import traceback
 

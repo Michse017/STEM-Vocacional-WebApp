@@ -103,3 +103,61 @@ export const finalizarCuestionario = async (id_usuario, bodyData) => {
   });
   return handleResponse(response);
 };
+
+// --- Dynamic Questionnaire Public APIs ---
+
+export const listDynamicQuestionnaires = async () => {
+  const res = await fetch(`${API_BASE_URL}/dynamic/questionnaires`, { method: "GET" });
+  return handleResponse(res);
+};
+
+export const getDynamicQuestionnaire = async (code) => {
+  const res = await fetch(`${API_BASE_URL}/dynamic/questionnaires/${encodeURIComponent(code)}`, { method: "GET" });
+  return handleResponse(res);
+};
+
+export const submitDynamicResponse = async (code, payload) => {
+  const res = await fetch(`${API_BASE_URL}/dynamic/questionnaires/${encodeURIComponent(code)}/responses`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+  return handleResponse(res);
+};
+
+export const getMyDynamicStatus = async (code, userCode) => {
+  const res = await fetch(`${API_BASE_URL}/dynamic/questionnaires/${encodeURIComponent(code)}/mine?user_code=${encodeURIComponent(userCode)}`, { method: "GET" });
+  return handleResponse(res);
+};
+
+export const saveDynamicResponse = async (code, payload) => {
+  const res = await fetch(`${API_BASE_URL}/dynamic/questionnaires/${encodeURIComponent(code)}/save`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+  return handleResponse(res);
+};
+
+export const finalizeDynamicResponse = async (code, payload) => {
+  const res = await fetch(`${API_BASE_URL}/dynamic/questionnaires/${encodeURIComponent(code)}/finalize`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+  return handleResponse(res);
+};
+
+export const saveDynamicResponseKeepAlive = async (code, payload) => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/dynamic/questionnaires/${encodeURIComponent(code)}/save`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      keepalive: true,
+      body: JSON.stringify(payload || {}),
+    });
+    return res.ok;
+  } catch (_) {
+    return false;
+  }
+};

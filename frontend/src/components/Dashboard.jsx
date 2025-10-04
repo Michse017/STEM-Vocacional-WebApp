@@ -1,4 +1,6 @@
 import { useLocation, useNavigate } from "react-router-dom"
+import { useEffect, useState } from "react"
+import { listDynamicQuestionnaires } from "../api"
 import { secciones } from "./cuestionarioConfig"
 
 const totalPreguntas = secciones.reduce((total, seccion) => {
@@ -18,6 +20,36 @@ export default function Dashboard() {
 
   const { usuario, respuestas } = location.state || {}
   const finalizado = Boolean(usuario?.finalizado || respuestas?.finalizado)
+
+  const [dyn, setDyn] = useState({ items: [], loading: true, error: "" })
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const data = await listDynamicQuestionnaires()
+        if (mounted) setDyn({ items: data?.items || [], loading: false, error: "" })
+      } catch (e) {
+        if (mounted) setDyn({ items: [], loading: false, error: e.message || "" })
+      }
+    })()
+    return () => { mounted = false }
+  }, [])
+
+  const [dynWithUser, setDynWithUser] = useState({ items: [], loading: true, error: "" })
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const res = await fetch(`${(typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname.startsWith('127.') || window.location.hostname.endsWith('.local')))
+          ? 'http://127.0.0.1:5000/api' : 'https://stem-backend-9sc0.onrender.com/api'}/dynamic/my-questionnaires?user_code=${encodeURIComponent(usuario?.codigo_estudiante || '')}`)
+        const data = await res.json()
+        if (mounted) setDynWithUser({ items: data?.items || [], loading: false, error: "" })
+      } catch (e) {
+        if (mounted) setDynWithUser({ items: [], loading: false, error: e.message || '' })
+      }
+    })()
+    return () => { mounted = false }
+  }, [usuario])
 
   const handleLogout = () => {
     navigate("/login", { replace: true })
@@ -301,6 +333,16 @@ export default function Dashboard() {
             </svg>
             {finalizado ? "Revisar (solo lectura)" : progresoTotal === 100 ? "Revisar Cuestionario" : "Continuar Cuestionario"}
           </button>
+          <button
+            onClick={() => navigate('/dynamic', { state: { usuario } })}
+            className="btn btn-secondary"
+            title="Ver cuestionarios dinámicos publicados"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 7h18M3 12h18M3 17h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            Cuestionarios Disponibles
+          </button>
           <button onClick={handleLogout} className="btn btn-secondary">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path
@@ -331,6 +373,69 @@ export default function Dashboard() {
             Cerrar Sesión
           </button>
         </div>
+
+        <div className="animate-fade-in" style={{ marginTop: "2rem" }}>
+          <div className="card" style={{ padding: "1rem" }}>
+            <h2 style={{ marginBottom: "0.75rem" }}>Cuestionarios dinámicos</h2>
+            {dyn.loading || dynWithUser.loading ? (
+              <p>Cargando...</p>
+            ) : dyn.error || dynWithUser.error ? (
+              <p style={{ color: "crimson" }}>{dyn.error}</p>
+            ) : dyn.items.length === 0 ? (
+              <p>No hay cuestionarios disponibles.</p>
+            ) : (
+              <ul style={{ listStyle: "none", padding: 0, display: "grid", gap: "0.75rem" }}>
+                {dyn.items.map((q) => {
+                  const mine = dynWithUser.items.find(i => i.code === q.code)
+                  const status = mine?.status || 'new'
+                  const progress = mine?.progress_percent ?? 0
+                  const actionLabel = status === 'finalized' ? 'Revisar' : (progress > 0 ? 'Continuar' : 'Responder')
+                  return (
+                    <li key={q.code} className="card" style={{ padding: "0.75rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{q.title || q.code}</div>
+                        <div style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>Código: {q.code} · Estado: {status} · Progreso: {progress}%{mine?.finalized_at ? ` · Finalizado: ${new Date(mine.finalized_at).toLocaleString()}` : ''}</div>
+                        <div className="progress-container" style={{ marginTop: 6 }}><div className="progress-bar" style={{ width: `${progress}%` }}></div></div>
+                      </div>
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => navigate(`/dynamic/${encodeURIComponent(q.code)}`, { state: { usuario } })}
+                      >
+                        {actionLabel}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+
+        {/* Historial de cuestionarios finalizados */}
+        {dynWithUser.items.some(i => i.status === 'finalized') && (
+          <div className="animate-fade-in" style={{ marginTop: "1rem" }}>
+            <div className="card" style={{ padding: "1rem" }}>
+              <h2 style={{ marginBottom: "0.75rem" }}>Historial de finalizados</h2>
+              <ul style={{ listStyle: "none", padding: 0, display: "grid", gap: "0.5rem" }}>
+                {dynWithUser.items.filter(i => i.status === 'finalized').sort((a,b) => {
+                  const da = a.finalized_at ? new Date(a.finalized_at).getTime() : 0;
+                  const db = b.finalized_at ? new Date(b.finalized_at).getTime() : 0;
+                  return db - da;
+                }).map(i => (
+                  <li key={i.code} className="card" style={{ padding: "0.75rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{i.title || i.code}</div>
+                      <div style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>
+                        Finalizado: {i.finalized_at ? new Date(i.finalized_at).toLocaleString() : '—'}
+                      </div>
+                    </div>
+                    <button className="btn btn-secondary" onClick={() => navigate(`/dynamic/${encodeURIComponent(i.code)}`, { state: { usuario } })}>Revisar</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

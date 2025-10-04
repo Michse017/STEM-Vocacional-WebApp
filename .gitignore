@@ -24,3 +24,6 @@ backend/node_modules/
 
 tempCodeRunnerFile.py
 .coverage
+
+RUN.md
+.env.example

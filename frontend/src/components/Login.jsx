@@ -23,6 +23,7 @@ export default function Login() {
         throw new Error("El código ingresado no está registrado.")
       }
       const respuestasGuardadas = await obtenerRespuestas(usuario.id_usuario)
+      try { sessionStorage.setItem('usuario', JSON.stringify(usuario)); } catch (_) {}
       if (respuestasGuardadas) {
         navigate("/dashboard", { state: { usuario, respuestas: respuestasGuardadas } })
       } else {

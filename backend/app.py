@@ -5,14 +5,25 @@ from database.controller import engine
 from database.models import Base
 from .routes.usuario_routes import usuario_bp
 from .routes.questionnaire_routes import questionnaire_bp
+from .routes.dynamic_questionnaire_routes import dynamic_questionnaire_bp
 
 def create_app():
     """Crea y configura la aplicación Flask."""
     app = Flask(__name__)
 
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_super_secret_key_change_for_prod')
+    default_secret = 'dev_super_secret_key_change_for_prod'
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', default_secret)
 
     if os.environ.get('FLASK_ENV') == 'production':
+        # Require a real secret key in production
+        if app.config['SECRET_KEY'] == default_secret:
+            raise RuntimeError("SECRET_KEY is required in production. Set the environment variable SECRET_KEY with a strong random value.")
+        # Harden session cookies in production
+        app.config.update(
+            SESSION_COOKIE_SECURE=True,
+            SESSION_COOKIE_HTTPONLY=True,
+            SESSION_COOKIE_SAMESITE='Lax',
+        )
         allowed_origins = [
             os.environ.get('FRONTEND_URL', 'https://stem-vocacional-webapp.vercel.app'),
             'https://stem-vocacional-web-app.vercel.app',
@@ -25,6 +36,10 @@ def create_app():
 
     app.register_blueprint(usuario_bp, url_prefix='/api')
     app.register_blueprint(questionnaire_bp, url_prefix='/api')
+    # Dynamic questionnaires (initial scaffold) - behind feature flag
+    app.config['ENABLE_DYNAMIC_QUESTIONNAIRES'] = os.environ.get('ENABLE_DYNAMIC_QUESTIONNAIRES', '0') == '1'
+    if app.config['ENABLE_DYNAMIC_QUESTIONNAIRES']:
+        app.register_blueprint(dynamic_questionnaire_bp, url_prefix='/api')
 
     @app.route('/')
     def home():
@@ -32,7 +47,12 @@ def create_app():
             "message": "STEM-Vocacional Backend API",
             "status": "running",
             "environment": os.environ.get('FLASK_ENV', 'development'),
-            "endpoints": ["/api/health", "/api/usuarios", "/api/questionnaire"],
+            "endpoints": [
+                "/api/health", 
+                "/api/usuarios", 
+                "/api/questionnaire",
+                *( ["/api/dynamic/questionnaires"] if app.config.get('ENABLE_DYNAMIC_QUESTIONNAIRES') else [] )
+            ],
         })
 
     @app.route('/api/health')
