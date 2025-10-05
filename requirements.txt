@@ -3,6 +3,11 @@ flask-cors==5.0.1
 Flask-SQLAlchemy==3.1.1
 pydantic==2.10.6
 SQLAlchemy==2.0.40
-pymssql==2.3.1
+# Instalar pymssql solo en Python < 3.13 (en 3.13 suele fallar la build). En 3.13 usamos fallback pyodbc.
+pymssql==2.3.1; python_version < "3.13"
+pyodbc==5.1.0
 python-dotenv==1.1.0
 gunicorn==23.0.0
+passlib[bcrypt]==1.7.4
+PyJWT==2.9.0
+Flask-Limiter==3.7.0

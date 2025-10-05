@@ -1,65 +1,45 @@
 import { useLocation, useNavigate } from "react-router-dom"
 import { useEffect, useState } from "react"
-import { listDynamicQuestionnaires } from "../api"
-import { secciones } from "./cuestionarioConfig"
-
-const totalPreguntas = secciones.reduce((total, seccion) => {
-  return total + seccion.preguntas.length
-}, 0)
-
-const socioConfig = secciones.find((s) => s.id === "sociodemografica")
-const intelConfig = secciones.find((s) => s.id === "inteligencias_multiples")
-const socioIds = (socioConfig?.preguntas || []).map((p) => p.id)
-const intelIds = (intelConfig?.preguntas || []).map((p) => p.id)
-const totalPreguntasSocio = socioIds.length
-const totalPreguntasIntel = intelIds.length
+import { getDynamicOverview } from "../api"
 
 export default function Dashboard() {
   const location = useLocation()
   const navigate = useNavigate()
 
-  const { usuario, respuestas } = location.state || {}
-  const finalizado = Boolean(usuario?.finalizado || respuestas?.finalizado)
+  let { usuario } = location.state || {}
+  // Persist and recover usuario from sessionStorage
+  if (!usuario) {
+    try { const u = JSON.parse(sessionStorage.getItem('usuario') || 'null'); if (u && u.id_usuario) usuario = u; } catch (_) {}
+  } else {
+    try { sessionStorage.setItem('usuario', JSON.stringify(usuario)); } catch (_) {}
+  }
 
-  const [dyn, setDyn] = useState({ items: [], loading: true, error: "" })
-  useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      try {
-        const data = await listDynamicQuestionnaires()
-        if (mounted) setDyn({ items: data?.items || [], loading: false, error: "" })
-      } catch (e) {
-        if (mounted) setDyn({ items: [], loading: false, error: e.message || "" })
-      }
-    })()
-    return () => { mounted = false }
-  }, [])
-
+  const [primary, setPrimary] = useState({ loading: true, data: null, user: null, error: "" })
   const [dynWithUser, setDynWithUser] = useState({ items: [], loading: true, error: "" })
   useEffect(() => {
     let mounted = true
     ;(async () => {
       try {
-        const res = await fetch(`${(typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname.startsWith('127.') || window.location.hostname.endsWith('.local')))
-          ? 'http://127.0.0.1:5000/api' : 'https://stem-backend-9sc0.onrender.com/api'}/dynamic/my-questionnaires?user_code=${encodeURIComponent(usuario?.codigo_estudiante || '')}`)
-        const data = await res.json()
-        if (mounted) setDynWithUser({ items: data?.items || [], loading: false, error: "" })
+        const ov = await getDynamicOverview(usuario?.codigo_estudiante || '')
+        if (!mounted) return
+        setPrimary({ loading: false, data: ov?.primary?.questionnaire || null, user: ov?.primary?.user || null, error: "" })
+        setDynWithUser({ items: ov?.items || [], loading: false, error: "" })
       } catch (e) {
-        if (mounted) setDynWithUser({ items: [], loading: false, error: e.message || '' })
+        if (mounted) {
+          setPrimary({ loading: false, data: null, user: null, error: e.message || '' })
+          setDynWithUser({ items: [], loading: false, error: e.message || '' })
+        }
       }
     })()
     return () => { mounted = false }
   }, [usuario])
 
   const handleLogout = () => {
+    try { sessionStorage.removeItem('usuario'); } catch (_) {}
     navigate("/login", { replace: true })
   }
 
-  const handleContinue = () => {
-    navigate("/cuestionario", { state: { usuario, respuestas } })
-  }
-
-  if (!usuario || !respuestas) {
+  if (!usuario) {
     return (
       <div
         style={{
@@ -84,24 +64,15 @@ export default function Dashboard() {
     )
   }
 
-  const respuestasSocio = respuestas.sociodemografica || {}
-  const respuestasIntel = respuestas.inteligencias_multiples || {}
+  // If primary dynamic questionnaire exists, prefer dynamic-first UI and hide legacy progress blocks
+  const hasPrimary = Boolean(primary.data)
+  const primaryTotal = hasPrimary ? (primary.data.sections || []).reduce((acc, s) => acc + (s.questions?.length || 0), 0) : 0
+  const primaryAnswered = hasPrimary ? (primary.user?.answers ? Object.keys(primary.user.answers).length : 0) : 0
+  const primaryStatus = primary.user?.status
+  const primaryProgressCalc = hasPrimary && primaryTotal > 0 ? Math.min(100, Math.round((primaryAnswered / primaryTotal) * 100)) : 0
+  const primaryProgress = primaryStatus === 'finalized' ? 100 : primaryProgressCalc
 
-  // Contar solo las preguntas configuradas (excluye campos auxiliares como "otro_*")
-  const completadoSocio = socioIds.filter((id) => {
-    const v = respuestasSocio[id]
-    return v !== null && v !== undefined && v !== ""
-  }).length
-  const progresoSocio = totalPreguntasSocio > 0 ? Math.min(100, Math.round((completadoSocio / totalPreguntasSocio) * 100)) : 0
-
-  const completadoIntel = intelIds.filter((id) => {
-    const v = respuestasIntel[id]
-    return v !== null && v !== undefined && v !== ""
-  }).length
-  const progresoIntel = totalPreguntasIntel > 0 ? Math.min(100, Math.round((completadoIntel / totalPreguntasIntel) * 100)) : 0
-
-  const completadoTotal = completadoSocio + completadoIntel
-  const progresoTotal = totalPreguntas > 0 ? Math.min(100, Math.round((completadoTotal / totalPreguntas) * 100)) : 0
+  // We are removing the general progress card per request; keep calculations local for future if needed
 
   return (
     <div
@@ -133,206 +104,86 @@ export default function Dashboard() {
           </p>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", marginBottom: "2rem" }}>
-          <div className="card animate-fade-in">
-            <div
-              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}
-            >
-              <h2 style={{ fontSize: "1.5rem", fontWeight: "bold" }}>Progreso General</h2>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <div
-                  style={{
-                    width: "0.75rem",
-                    height: "0.75rem",
-                    background: "linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%)",
-                    borderRadius: "50%",
-                  }}
-                ></div>
-                <span style={{ fontSize: "0.875rem", color: "var(--text-muted-light)" }}>En progreso</span>
-              </div>
+        {/* Cuestionario principal destacado (mostrar debajo del título) */}
+        {primary.loading ? (
+          <div className="card animate-fade-in" style={{ marginBottom: '1.5rem' }}>
+            <div style={{height: '64px', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--text-muted-light)'}}>
+              Cargando cuestionario principal…
             </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: "1.125rem", fontWeight: "600" }}>{progresoTotal}% completado</span>
-                <span style={{ fontSize: "0.875rem", color: "var(--text-muted-light)" }}>
-                  {completadoTotal} de {totalPreguntas} preguntas
-                </span>
+          </div>
+        ) : primary.data ? (
+          <div className="card animate-fade-in" style={{ marginBottom: '1.5rem', border: '1px solid rgba(0,112,243,0.2)', background: 'linear-gradient(180deg, rgba(0,112,243,0.04), rgba(0,200,150,0.03))' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span className="badge badge-primary">Principal</span>
+                <span style={{ color: 'var(--text-muted-light)', fontSize: '0.9rem' }}>Te recomendamos completar este cuestionario primero.</span>
               </div>
-              <div className="progress-container" style={{ height: "0.75rem" }}>
-                <div className="progress-bar" style={{ width: `${progresoTotal}%` }}></div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '1.2rem' }}>{primary.data.title || primary.data.code}</div>
+                  <div style={{ color: 'var(--text-muted)' }}>Código: {primary.data.code}</div>
+                  {primary.user?.status && (
+                    <div style={{ marginTop: 6, fontSize: '0.875rem', color: 'var(--text-muted)' }}>Estado: {primary.user.status}</div>
+                  )}
+                  {hasPrimary && (
+                    <div style={{ marginTop: 6, fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+                      Progreso: {primaryProgress}% ({primaryAnswered} de {primaryTotal})
+                    </div>
+                  )}
+                </div>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => navigate(`/dynamic/${encodeURIComponent(primary.data.code)}`, { state: { usuario }, replace: false })}
+                >
+                  {(() => {
+                    const st = primary.user?.status
+                    if (st === 'finalized') return 'Revisar'
+                    const answers = primary.user?.answers || {}
+                    const answeredCount = typeof answers === 'object' ? Object.keys(answers).length : 0
+                    if (st === 'in_progress' || answeredCount > 0) return 'Continuar'
+                    return 'Responder'
+                  })()}
+                </button>
               </div>
             </div>
           </div>
+        ) : null}
 
+        {/* Mensaje de finalizado del principal */}
+        {hasPrimary && primary.user?.status === 'finalized' && (
           <div
+            className="card animate-fade-in"
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-              gap: "1.5rem",
+              background: "linear-gradient(135deg, rgba(0, 200, 150, 0.05) 0%, rgba(0, 112, 243, 0.05) 100%)",
+              border: "1px solid rgba(0, 200, 150, 0.2)",
+              marginBottom: "1.5rem"
             }}
           >
-            <div className="card animate-fade-in">
-              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
-                <div
-                  style={{
-                    width: "2.5rem",
-                    height: "2.5rem",
-                    backgroundColor: "rgba(0, 112, 243, 0.1)",
-                    borderRadius: "8px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path
-                      d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
-                      stroke="#0070f3"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <circle
-                      cx="12"
-                      cy="7"
-                      r="4"
-                      stroke="#0070f3"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </div>
-                <h3 style={{ fontSize: "1.125rem", fontWeight: "600" }}>Información Sociodemográfica</h3>
+            <div style={{ textAlign: "center" }}>
+              <div
+                style={{
+                  width: "4rem",
+                  height: "4rem",
+                  background: "linear-gradient(135deg, var(--secondary-color) 0%, var(--primary-color) 100%)",
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "0 auto 1rem",
+                }}
+              >
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M9 12l2 2 4-4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <circle cx="12" cy="12" r="10" stroke="white" strokeWidth="2" />
+                </svg>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem" }}>
-                  <span style={{ color: "var(--text-muted-light)" }}>{progresoSocio}% completado</span>
-                  <span style={{ color: "var(--text-muted-light)" }}>
-                    {completadoSocio} de {totalPreguntasSocio}
-                  </span>
-                </div>
-                <div className="progress-container">
-                  <div className="progress-bar" style={{ width: `${progresoSocio}%` }}></div>
-                </div>
-              </div>
-            </div>
-
-            <div className="card animate-fade-in">
-              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
-                <div
-                  style={{
-                    width: "2.5rem",
-                    height: "2.5rem",
-                    backgroundColor: "rgba(0, 200, 150, 0.1)",
-                    borderRadius: "8px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path
-                      d="M9 12l2 2 4-4"
-                      stroke="#00c896"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M21 12c0 1.2-.4 2.3-1 3.3a11.5 11.5 0 0 1-7 7c-1 .6-2.1 1-3.3 1s-2.3-.4-3.3-1a11.5 11.5 0 0 1-7-7c-.6-1-.9-2.1-.9-3.3s.3-2.3.9-3.3a11.5 11.5 0 0 1 7-7c1-.6 2.1-1 3.3-1s2.3.4 3.3 1a11.5 11.5 0 0 1 7 7c.6 1 1 2.1 1 3.3"
-                      stroke="#00c896"
-                      strokeWidth="2"
-                    />
-                  </svg>
-                </div>
-                <h3 style={{ fontSize: "1.125rem", fontWeight: "600" }}>Test de Inteligencias Múltiples</h3>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem" }}>
-                  <span style={{ color: "var(--text-muted-light)" }}>{progresoIntel}% completado</span>
-                  <span style={{ color: "var(--text-muted-light)" }}>
-                    {completadoIntel} de {totalPreguntasIntel}
-                  </span>
-                </div>
-                <div className="progress-container">
-                  <div className="progress-bar" style={{ width: `${progresoIntel}%` }}></div>
-                </div>
-              </div>
+              <h3 style={{ fontSize: "1.5rem", fontWeight: "bold", color: "var(--secondary-color)", marginBottom: "0.5rem" }}>¡Cuestionario Completado!</h3>
+              <p style={{ color: "var(--text-muted-light)" }}>Has completado el cuestionario principal de orientación vocacional.</p>
             </div>
           </div>
+        )}
 
-          {progresoTotal === 100 && (
-            <div
-              className="card animate-fade-in"
-              style={{
-                background: "linear-gradient(135deg, rgba(0, 200, 150, 0.05) 0%, rgba(0, 112, 243, 0.05) 100%)",
-                border: "1px solid rgba(0, 200, 150, 0.2)",
-              }}
-            >
-              <div style={{ textAlign: "center" }}>
-                <div
-                  style={{
-                    width: "4rem",
-                    height: "4rem",
-                    background: "linear-gradient(135deg, var(--secondary-color) 0%, var(--primary-color) 100%)",
-                    borderRadius: "50%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    margin: "0 auto 1rem",
-                  }}
-                >
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path
-                      d="M9 12l2 2 4-4"
-                      stroke="white"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <circle cx="12" cy="12" r="10" stroke="white" strokeWidth="2" />
-                  </svg>
-                </div>
-                <h3
-                  style={{
-                    fontSize: "1.5rem",
-                    fontWeight: "bold",
-                    color: "var(--secondary-color)",
-                    marginBottom: "0.5rem",
-                  }}
-                >
-                  ¡Cuestionario Completado!
-                </h3>
-                <p style={{ color: "var(--text-muted-light)" }}>
-                  Has completado todas las secciones del cuestionario de orientación vocacional.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div
-          className="animate-fade-in"
-          style={{
-            display: "flex",
-            flexDirection: window.innerWidth < 640 ? "column" : "row",
-            gap: "1rem",
-            justifyContent: "center",
-          }}
-        >
-          <button onClick={handleContinue} className="btn btn-primary">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M15.5 3H8.5C7.39543 3 6.5 3.89543 6.5 5V19C6.5 20.1046 7.39543 21 8.5 21H15.5C16.6046 21 17.5 20.1046 17.5 19V5C17.5 3.89543 16.6046 3 15.5 3Z"
-                stroke="currentColor"
-                strokeWidth="2"
-              />
-              <path d="M9.5 7H14.5M9.5 11H14.5M9.5 15H11.5" stroke="currentColor" strokeWidth="2" />
-            </svg>
-            {finalizado ? "Revisar (solo lectura)" : progresoTotal === 100 ? "Revisar Cuestionario" : "Continuar Cuestionario"}
-          </button>
+        <div className="animate-fade-in" style={{ display: "flex", flexDirection: window.innerWidth < 640 ? "column" : "row", gap: "1rem", justifyContent: "center" }}>
           <button
             onClick={() => navigate('/dynamic', { state: { usuario } })}
             className="btn btn-secondary"
@@ -376,30 +227,29 @@ export default function Dashboard() {
 
         <div className="animate-fade-in" style={{ marginTop: "2rem" }}>
           <div className="card" style={{ padding: "1rem" }}>
-            <h2 style={{ marginBottom: "0.75rem" }}>Cuestionarios dinámicos</h2>
-            {dyn.loading || dynWithUser.loading ? (
+            <h2 style={{ marginBottom: "0.75rem" }}>Cuestionarios Disponibles</h2>
+            {dynWithUser.loading ? (
               <p>Cargando...</p>
-            ) : dyn.error || dynWithUser.error ? (
-              <p style={{ color: "crimson" }}>{dyn.error}</p>
-            ) : dyn.items.length === 0 ? (
+            ) : dynWithUser.error ? (
+              <p style={{ color: "crimson" }}>{dynWithUser.error}</p>
+            ) : dynWithUser.items.length === 0 ? (
               <p>No hay cuestionarios disponibles.</p>
             ) : (
               <ul style={{ listStyle: "none", padding: 0, display: "grid", gap: "0.75rem" }}>
-                {dyn.items.map((q) => {
-                  const mine = dynWithUser.items.find(i => i.code === q.code)
-                  const status = mine?.status || 'new'
-                  const progress = mine?.progress_percent ?? 0
+                {dynWithUser.items.map((i) => {
+                  const status = i?.status || 'new'
+                  const progress = i?.progress_percent ?? 0
                   const actionLabel = status === 'finalized' ? 'Revisar' : (progress > 0 ? 'Continuar' : 'Responder')
                   return (
-                    <li key={q.code} className="card" style={{ padding: "0.75rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <li key={i.code} className="card" style={{ padding: "0.75rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <div>
-                        <div style={{ fontWeight: 600 }}>{q.title || q.code}</div>
-                        <div style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>Código: {q.code} · Estado: {status} · Progreso: {progress}%{mine?.finalized_at ? ` · Finalizado: ${new Date(mine.finalized_at).toLocaleString()}` : ''}</div>
+                        <div style={{ fontWeight: 600 }}>{i.title || i.code}</div>
+                        <div style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>Código: {i.code} · Estado: {status} · Progreso: {progress}%{i?.finalized_at ? ` · Finalizado: ${new Date(i.finalized_at).toLocaleString()}` : ''}</div>
                         <div className="progress-container" style={{ marginTop: 6 }}><div className="progress-bar" style={{ width: `${progress}%` }}></div></div>
                       </div>
                       <button
                         className="btn btn-primary"
-                        onClick={() => navigate(`/dynamic/${encodeURIComponent(q.code)}`, { state: { usuario } })}
+                        onClick={() => navigate(`/dynamic/${encodeURIComponent(i.code)}`, { state: { usuario } })}
                       >
                         {actionLabel}
                       </button>

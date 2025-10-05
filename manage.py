@@ -35,17 +35,12 @@ def parse_args():
     p_pub = sub.add_parser("run-public", help="Run public app (app.py)")
     add_common(p_pub)
 
-    p_adm = sub.add_parser("run-admin", help="Run admin app (admin_app.py)")
-    add_common(p_adm)
-    p_adm.add_argument("--debug", action="store_true")
-
-    p_adm_full = sub.add_parser("run-admin-full", help="Run admin app + frontend (React) concurrently")
-    add_common(p_adm_full)
-    p_adm_full.add_argument("--debug", action="store_true")
-    p_adm_full.add_argument("--frontend-port", type=int, default=3000, help="Port for React dev server (default 3000)")
-    p_adm_full.add_argument("--frontend-path", default="frontend", help="Relative path to frontend folder")
-    p_adm_full.add_argument("--silent-frontend", action="store_true", help="Do not attach frontend output (fire & forget)")
-    p_adm_full.add_argument("--node-cmd", default="npm", help="Frontend start command (npm|yarn|pnpm or path to executable)")
+    # Deprecated admin-only launchers (single app now). Use run-admin-ui to only start frontend with admin enabled.
+    p_adm_ui = sub.add_parser("run-admin-ui", help="Start only the frontend with admin enabled (backend must be running on 5000)")
+    p_adm_ui.add_argument("--frontend-port", type=int, default=3000)
+    p_adm_ui.add_argument("--frontend-path", default="frontend")
+    p_adm_ui.add_argument("--silent-frontend", action="store_true")
+    p_adm_ui.add_argument("--node-cmd", default="npm")
 
     p_pub_full = sub.add_parser("run-public-full", help="Run public app + frontend (React) concurrently")
     add_common(p_pub_full)
@@ -56,6 +51,15 @@ def parse_args():
     p_pub_full.add_argument("--node-cmd", default="npm", help="Frontend start command (npm|yarn|pnpm or path to executable)")
 
     sub.add_parser("seed-dynamic", help="Seed legacy questionnaire into dynamic tables")
+
+    p_add_admin = sub.add_parser("add-admin", help="Create or update an admin user")
+    p_add_admin.add_argument("codigo", help="Unique admin code/username")
+    p_add_admin.add_argument("--password", help="Password (omit to prompt securely)")
+
+    p_list_admins = sub.add_parser("list-admins", help="List admin users (codigo, active)")
+
+    # DB maintenance: drop legacy usuarios.finalizado
+    sub.add_parser("drop-legacy-finalizado", help="Drop legacy 'finalizado' column from usuarios table (migrated to dynamic assignments)")
 
     return parser.parse_args()
 
@@ -75,20 +79,27 @@ def run_public(host: str, port: int | None, dynamic: bool):
     app.run(host=host, port=port or 5000, debug=False)
 
 
-def run_admin(host: str, port: int | None, dynamic: bool, debug: bool):
-    set_flag(dynamic)
-    # Ensure an admin access key exists for protection; if not, generate one and print it.
-    if not os.environ.get("ADMIN_ACCESS_KEY"):
-        import secrets, string
-        alphabet = string.ascii_letters + string.digits + "!@#%^&*()_-+=[]{}:;,.?/<>|~"
-        generated = ''.join(secrets.choice(alphabet) for _ in range(48))
-        os.environ["ADMIN_ACCESS_KEY"] = generated
-        masked = generated[:2] + "*" * (len(generated)-4) + generated[-2:]
-        print(f"[run-admin] ADMIN_ACCESS_KEY generated for this session (len={len(generated)}): {masked}")
-    # Use legacy admin_app module
-    mod = import_module("admin_app")
-    app = mod.create_admin_app()
-    app.run(host=host, port=port or 5001, debug=debug)
+def run_admin_ui(frontend_port: int, frontend_path: str, silent: bool, node_cmd: str):
+    env = os.environ.copy()
+    env.setdefault("REACT_APP_ENABLE_ADMIN", "1")
+    env.setdefault("REACT_APP_ADMIN_API_BASE", f"http://127.0.0.1:5000/api")
+    front_dir = Path(frontend_path).resolve()
+    if not front_dir.exists():
+        print(f"[run-admin-ui] Frontend path not found: {front_dir}", file=sys.stderr)
+        sys.exit(2)
+    try:
+        tool_parts = _resolve_frontend_command(node_cmd)
+    except FileNotFoundError as e:
+        print(f"[run-admin-ui] {e}", file=sys.stderr)
+        sys.exit(3)
+    if len(tool_parts) == 1:
+        tool_parts += ["run", "start"] if tool_parts[0] in {"yarn", "pnpm"} else ["start"]
+    env.setdefault("PORT", str(frontend_port))
+    print(f"[run-admin-ui] Starting frontend in {front_dir} using: {' '.join(tool_parts)} ...")
+    if silent:
+        subprocess.Popen(tool_parts, cwd=str(front_dir), env=env)
+    else:
+        subprocess.Popen(tool_parts, cwd=str(front_dir), env=env, stdout=sys.stdout, stderr=sys.stderr)
 
 
 def _resolve_frontend_command(cmd: str) -> list[str]:
@@ -126,52 +137,25 @@ def _resolve_frontend_command(cmd: str) -> list[str]:
         raise FileNotFoundError(
             f"Frontend start tool '{exe}' not found. Provide --node-cmd path (e.g. C:/Program Files/nodejs/npm.cmd)"
         )
+    # Windows: ensure we point to an actual executable (.cmd/.exe) for npm to avoid WinError 193
+    if os.name == 'nt':
+        name_lower = resolved_path.name.lower()
+        # If resolved to 'npm' without extension, prefer sibling npm.cmd
+        if name_lower == 'npm' and resolved_path.suffix == '':
+            sibling_cmd = resolved_path.with_name('npm.cmd')
+            if sibling_cmd.exists():
+                resolved_path = sibling_cmd
+        # If still no known executable extension, try adding .cmd
+        if resolved_path.suffix.lower() not in {'.cmd', '.exe', '.bat', '.com'}:
+            guess_cmd = resolved_path.with_suffix('.cmd')
+            if guess_cmd.exists():
+                resolved_path = guess_cmd
     # Replace executable with resolved absolute path to avoid PATH issues
     parts[0] = str(resolved_path)
     return parts
 
 
-def run_admin_full(host: str, port: int | None, dynamic: bool, debug: bool, frontend_port: int, frontend_path: str, silent: bool, node_cmd: str):
-    set_flag(dynamic)
-    # Prepare environment for frontend
-    env = os.environ.copy()
-    env.setdefault("REACT_APP_ENABLE_ADMIN", "1")
-    env.setdefault("REACT_APP_ADMIN_API_BASE", f"http://{host}:{port or 5001}/api")
-    env.setdefault("PORT", str(frontend_port))  # CRA respects PORT
-    # Admin access key: generate a hard-to-guess default per process if not provided, and share with frontend
-    default_key = env.get("ADMIN_ACCESS_KEY")
-    if not default_key:
-        # Complex, no visible pattern; different on each run unless user sets it explicitly
-        import secrets, string
-        alphabet = string.ascii_letters + string.digits + "!@#%^&*()_-+=[]{}:;,.?/<>|~"
-        default_key = ''.join(secrets.choice(alphabet) for _ in range(48))
-        env["ADMIN_ACCESS_KEY"] = default_key
-    # Ensure backend process (this process) sees the key before starting the app
-    os.environ["ADMIN_ACCESS_KEY"] = default_key
-    # Ensure frontend dev server also receives the key so it can send the header
-    env.setdefault("REACT_APP_ADMIN_ACCESS_KEY", default_key)
-    print(f"[run-admin-full] Admin access key prepared (len={len(default_key)}) and injected to backend/frontend.")
-    # Launch frontend
-    front_dir = Path(frontend_path).resolve()
-    if not front_dir.exists():
-        print(f"[run-admin-full] Frontend path not found: {front_dir}", file=sys.stderr)
-        sys.exit(2)
-    try:
-        tool_parts = _resolve_frontend_command(node_cmd)
-    except FileNotFoundError as e:
-        print(f"[run-admin-full] {e}", file=sys.stderr)
-        sys.exit(3)
-    # If user just specified tool without args, append default start
-    if len(tool_parts) == 1:
-        tool_parts += ["run", "start"] if tool_parts[0] in {"yarn", "pnpm"} else ["start"]
-    print(f"[run-admin-full] Starting frontend in {front_dir} using: {' '.join(tool_parts)} ...")
-    if silent:
-        subprocess.Popen(tool_parts, cwd=str(front_dir), env=env)
-    else:
-        subprocess.Popen(tool_parts, cwd=str(front_dir), env=env, stdout=sys.stdout, stderr=sys.stderr)
-    # Now run admin backend
-    print("[run-admin-full] Starting admin backend ...")
-    run_admin(host, port, dynamic, debug)
+    # Removed run-admin-full (single app). Use run-public to start backend and run-admin-ui for frontend only.
 
 
 def run_public_full(host: str, port: int | None, dynamic: bool, debug: bool, frontend_port: int, frontend_path: str, silent: bool, node_cmd: str):
@@ -205,23 +189,98 @@ def run_public_full(host: str, port: int | None, dynamic: bool, debug: bool, fro
     run_public(host, port, dynamic)
 
 
-def seed_dynamic():
-    set_flag(True)
-    import seed_dynamic_from_legacy  # noqa: F401  (imports & runs main)
+def add_admin(codigo: str, password: str | None):
+    from getpass import getpass
+    from database.controller import SessionLocal
+    from database.models import AdminUser
+    from backend.services.auth_admin_service import hash_password
+    if not password:
+        pw1 = getpass("New admin password: ")
+        pw2 = getpass("Confirm password: ")
+        if pw1 != pw2:
+            print("Passwords do not match.")
+            return 2
+        password = pw1
+    with SessionLocal() as db:
+        user = db.query(AdminUser).filter(AdminUser.codigo == codigo).first()
+        if user:
+            user.password_hash = hash_password(password)
+            user.is_active = True
+            action = "updated"
+        else:
+            user = AdminUser(codigo=codigo, password_hash=hash_password(password), is_active=True)
+            db.add(user)
+            action = "created"
+        db.commit()
+        print(f"Admin '{codigo}' {action} (id={user.id}).")
+
+
+def list_admins():
+    from database.controller import SessionLocal
+    from database.models import AdminUser
+    with SessionLocal() as db:
+        rows = db.query(AdminUser).all()
+        if not rows:
+            print("No admin users found.")
+        else:
+            print("Admins:")
+            for r in rows:
+                print(f" - id={r.id}, codigo={r.codigo}, active={r.is_active}")
+
+
+def drop_legacy_finalizado():
+    """Drop usuarios.finalizado column (legacy) on SQL Server, handling default constraint.
+    Safe to run multiple times. Requires DB permissions to alter table.
+    """
+    from sqlalchemy import text
+    from database.controller import engine
+    try:
+        with engine.begin() as conn:
+            # Check if column exists
+            col_exists = conn.execute(text(
+                """
+                SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='usuarios' AND COLUMN_NAME='finalizado'
+                """
+            )).first()
+            if not col_exists:
+                print("usuarios.finalizado already absent.")
+                return 0
+            # Find and drop default constraint if any (SQL Server specifics)
+            row = conn.execute(text(
+                """
+                SELECT df.name AS df_name
+                FROM sys.default_constraints df
+                INNER JOIN sys.columns c ON c.default_object_id = df.object_id
+                INNER JOIN sys.tables t ON t.object_id = df.parent_object_id
+                WHERE t.name = 'usuarios' AND c.name = 'finalizado'
+                """
+            )).first()
+            if row and row[0]:
+                df_name = row[0]
+                conn.execute(text(f"ALTER TABLE usuarios DROP CONSTRAINT {df_name}"))
+            # Finally drop the column
+            conn.execute(text("ALTER TABLE usuarios DROP COLUMN finalizado"))
+            print("Dropped usuarios.finalizado column.")
+            return 0
+    except Exception as e:
+        print(f"Failed to drop usuarios.finalizado: {e}")
+        return 2
 
 
 def main():
     args = parse_args()
     if args.command == "run-public":
         run_public(args.host, args.port, not args.no_dynamic)
-    elif args.command == "run-admin":
-        run_admin(args.host, args.port, not args.no_dynamic, args.debug)
-    elif args.command == "run-admin-full":
-        run_admin_full(args.host, args.port, not args.no_dynamic, args.debug, args.frontend_port, args.frontend_path, args.silent_frontend, args.node_cmd)
+    elif args.command == "run-admin-ui":
+        run_admin_ui(args.frontend_port, args.frontend_path, args.silent_frontend, args.node_cmd)
     elif args.command == "run-public-full":
         run_public_full(args.host, args.port, not args.no_dynamic, args.debug, args.frontend_port, args.frontend_path, args.silent_frontend, args.node_cmd)
-    elif args.command == "seed-dynamic":
-        seed_dynamic()
+    elif args.command == "add-admin":
+        return add_admin(args.codigo, args.password)
+    elif args.command == "list-admins":
+        return list_admins()
+    elif args.command == "drop-legacy-finalizado":
+        return drop_legacy_finalizado()
     else:
         print("Unknown command")
         return 1

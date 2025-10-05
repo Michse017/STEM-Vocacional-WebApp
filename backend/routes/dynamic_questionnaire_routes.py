@@ -8,10 +8,92 @@ from database.dynamic_models import (
 	QuestionnaireAssignment, Response, ResponseItem
 )
 from backend.services.dynamic_validation import validate_answers
+from database.controller import get_usuario_by_codigo
 from sqlalchemy import desc
 from sqlalchemy.sql import func
 
 dynamic_questionnaire_bp = Blueprint("dynamic_questionnaire", __name__)
+
+@dynamic_questionnaire_bp.route("/dynamic/overview", methods=["GET"])
+def dynamic_overview():
+	"""Return combined data to minimize client round-trips.
+	Query params: user_code
+	Response shape:
+	{
+	  primary: { questionnaire: <structure or null>, user: {status, answers} | null },
+	  items: [ { code, title, status, progress_percent, finalized_at, submitted_at } ]
+	}
+	"""
+	if not _feature_enabled():
+		return jsonify({"error": "disabled"}), 404
+	user_code = (request.args.get("user_code") or "").strip() or None
+	with Session(engine) as s:
+		# Primary
+		primary_payload = {"questionnaire": None, "user": None}
+		q_primary = s.query(Questionnaire).filter(Questionnaire.is_primary == True, Questionnaire.status == "active").first()
+		if q_primary:
+			versions_sorted = sorted(q_primary.versions, key=lambda v: v.version_number, reverse=True)
+			v_primary = next((v for v in versions_sorted if v.status == "published"), versions_sorted[0] if versions_sorted else None)
+			if v_primary:
+				primary_payload["questionnaire"] = _serialize_version(v_primary)
+				if user_code:
+					assign = s.query(QuestionnaireAssignment).filter_by(user_code=user_code, questionnaire_version_id=v_primary.id).order_by(desc(QuestionnaireAssignment.last_activity_at)).first()
+					if assign:
+						resp = s.query(Response).filter_by(assignment_id=assign.id).order_by(desc(Response.id)).first()
+						answers = {}
+						if resp:
+							qmap = {}
+							for sec in v_primary.sections:
+								for qu in sec.questions:
+									qmap[qu.id] = qu.code
+							items = s.query(ResponseItem).filter_by(response_id=resp.id).all()
+							for it in items:
+								code_key = qmap.get(it.question_id)
+								if not code_key:
+									continue
+								answers[code_key] = _parse_value(it)
+						primary_payload["user"] = {"status": assign.status, "answers": answers}
+		# Items for user
+		result_items = []
+		qs = s.query(Questionnaire).filter(Questionnaire.status == "active").all()
+		for q in qs:
+			if getattr(q, 'is_primary', False):
+				continue
+			versions_sorted = sorted(q.versions, key=lambda v: v.version_number, reverse=True)
+			target_version = next((v for v in versions_sorted if v.status == "published"), None)
+			if not target_version:
+				continue
+			total_questions = sum(len(sec.questions) for sec in target_version.sections)
+			status = "new"
+			progress = 0
+			finalized_at = None
+			submitted_at = None
+			if user_code:
+				assign = s.query(QuestionnaireAssignment).filter_by(user_code=user_code, questionnaire_version_id=target_version.id).order_by(desc(QuestionnaireAssignment.last_activity_at)).first()
+				if assign:
+					status = assign.status
+					resp = s.query(Response).filter_by(assignment_id=assign.id).order_by(desc(Response.id)).first()
+					answered = 0
+					if resp:
+						items = s.query(ResponseItem).filter_by(response_id=resp.id).all()
+						for it in items:
+							if it.numeric_value is not None:
+								answered += 1
+							elif it.value is not None and str(it.value).strip() != "":
+								answered += 1
+						finalized_at = resp.finalized_at.isoformat() if resp.finalized_at else None
+						submitted_at = resp.submitted_at.isoformat() if resp.submitted_at else None
+					if total_questions > 0:
+						progress = max(0, min(100, int(round((answered / total_questions) * 100))))
+			result_items.append({
+				"code": q.code,
+				"title": q.title,
+				"status": status,
+				"progress_percent": progress,
+				"finalized_at": finalized_at,
+				"submitted_at": submitted_at,
+			})
+	return jsonify({"primary": primary_payload, "items": result_items})
 
 @dynamic_questionnaire_bp.route("/dynamic/questionnaires", methods=["GET"])
 def list_questionnaires():
@@ -21,14 +103,30 @@ def list_questionnaires():
 		qs = session.query(Questionnaire).filter(Questionnaire.status == "active").all()
 		data = []
 		for q in qs:
-			# Ocultar el cuestionario principal 'vocacional' del listado público
-			if q.code == "vocacional":
+			# Ocultar el cuestionario principal del listado público
+			if getattr(q, 'is_primary', False):
 				continue
 			has_published = any(v.status == "published" for v in q.versions)
 			if not has_published:
 				continue
 			data.append({"code": q.code, "title": q.title, "status": q.status, "versions": len(q.versions)})
 	return jsonify({"items": data})
+
+@dynamic_questionnaire_bp.route("/dynamic/primary", methods=["GET"])
+def get_primary_questionnaire():
+	"""Return the primary questionnaire structure (latest published version)."""
+	if not _feature_enabled():
+		return jsonify({"message": "Dynamic questionnaires disabled"}), 404
+	with Session(engine) as session:
+		q = session.query(Questionnaire).filter(Questionnaire.is_primary == True, Questionnaire.status == "active").first()
+		if not q:
+			return jsonify({"error": "not_found"}), 404
+		versions_sorted = sorted(q.versions, key=lambda v: v.version_number, reverse=True)
+		version = next((v for v in versions_sorted if v.status == "published"), versions_sorted[0] if versions_sorted else None)
+		if not version:
+			return jsonify({"error": "no_versions"}), 404
+		structure = _serialize_version(version)
+	return jsonify({"questionnaire": structure})
 
 @dynamic_questionnaire_bp.route("/dynamic/questionnaires/<code>", methods=["GET"])
 def get_questionnaire(code: str):
@@ -90,7 +188,7 @@ def submit_response(code: str):
 		for sec in target_version.sections:
 			for qu in sec.questions:
 				question_map[qu.code] = qu
-		# Persist
+	# Persist
 		assign = QuestionnaireAssignment(user_code=user_code, questionnaire_version_id=target_version.id, status="submitted")
 		s.add(assign)
 		s.flush()
@@ -258,6 +356,7 @@ def _serialize_version(version: QuestionnaireVersion):
 						"code": qu.code,
 						"text": qu.text,
 						"type": qu.type,
+						"visible_if": getattr(qu, "visible_if", None),
 						"required": qu.required,
 						"order": qu.order,
 						"options": [
@@ -326,7 +425,7 @@ def my_questionnaires():
 		result = []
 		qs = s.query(Questionnaire).filter(Questionnaire.status == "active").all()
 		for q in qs:
-			if q.code == "vocacional":
+			if getattr(q, 'is_primary', False):
 				continue
 			versions_sorted = sorted(q.versions, key=lambda v: v.version_number, reverse=True)
 			target_version = next((v for v in versions_sorted if v.status == "published"), None)

@@ -5,6 +5,11 @@ import traceback
 
 usuario_bp = Blueprint('usuario_bp', __name__)
 
+@usuario_bp.route('/usuarios', methods=['OPTIONS'])
+def options_usuarios():
+    # CORS preflight handler (Flask-CORS should handle, but we respond explicitly)
+    return ('', 200)
+
 @usuario_bp.route('/usuarios', methods=['POST'])
 def login_usuario():
     """
@@ -14,20 +19,37 @@ def login_usuario():
     db_session = SessionLocal()
     try:
         data = request.get_json()
+        try:
+            print(f"[login_usuario] payload={data}")
+        except Exception:
+            pass
         if not data or 'codigo_estudiante' not in data:
             return jsonify({"error": "El campo 'codigo_estudiante' es requerido."}), 400
 
         codigo = data['codigo_estudiante']
         usuario = validar_usuario_por_codigo(db_session, codigo)
+        try:
+            print(f"[login_usuario] ok codigo={codigo} -> id={usuario.id_usuario}")
+        except Exception:
+            pass
         
         return jsonify({
             "id_usuario": usuario.id_usuario,
             "codigo_estudiante": usuario.codigo_estudiante,
-            "finalizado": getattr(usuario, 'finalizado', False)
+            # finalizado (legacy) removed; dynamic progress is per-assignment
         }), 200
     except ValueError as e:
+        try:
+            print(f"[login_usuario] not found: {e}")
+        except Exception:
+            pass
         return jsonify({"error": str(e)}), 404
     except Exception as e:
+        try:
+            import traceback; traceback.print_exc()
+            print(f"[login_usuario] exception: {e}")
+        except Exception:
+            pass
         return jsonify({"error": f"Error interno del servidor: {str(e)}"}), 500
     finally:
         db_session.close()

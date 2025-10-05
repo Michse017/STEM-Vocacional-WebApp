@@ -1,18 +1,49 @@
 import React, { useState } from 'react';
 import { Btn } from './ui/Btn';
 import { OptionRow } from './OptionRow';
+import { api } from '../api';
 
-export function QuestionBlock({ question, isDraft, onPatch, onDelete, onAddOption, onPatchOption, onDeleteOption }) {
+export function QuestionBlock({ question, isDraft, canMoveUp, canMoveDown, onMoveUp, onMoveDown, onPatch, onDelete, onAddOption, onPatchOption, onDeleteOption, section, onCreateOtherCompanion }) {
   const [editing, setEditing] = useState(false);
-  const [editVals, setEditVals] = useState({ code: question.code, text: question.text, required: question.required, type: question.type });
+  const [editVals, setEditVals] = useState({ code: question.code, text: question.text, required: question.required, type: question.type, validation_rules: question.validation_rules || null, visible_if: question.visible_if || null });
   const [addingOption, setAddingOption] = useState(false);
-  const [newOpt, setNewOpt] = useState({ value: '', label: '' });
+  const [newOpt, setNewOpt] = useState({ value: '', label: '', is_other: false });
 
   const save = () => { onPatch(question.id, editVals); setEditing(false); };
   const addOption = (e) => {
     e.preventDefault();
     if (!newOpt.value.trim() || !newOpt.label.trim()) return;
     onAddOption(question.id, newOpt); setNewOpt({ value: '', label: '' }); setAddingOption(false);
+  };
+
+  const reorderOptions = async (optionId, direction) => {
+    const opts = [...(question.options || [])].sort((a,b) => a.order - b.order || a.id - b.id);
+    const idx = opts.findIndex(o => o.id === optionId);
+    if (idx < 0) return;
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= opts.length) return;
+    const a = opts[idx];
+    const b = opts[targetIdx];
+    try {
+      await Promise.all([
+        api(`/admin/options/${a.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: b.order }) }),
+        api(`/admin/options/${b.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: a.order }) })
+      ]);
+      // Delegate reload to parent via patch noop to keep it simple
+      onPatch(question.id, {});
+    } catch (e) {
+      alert(e.message || 'No se pudo reordenar la opción');
+    }
+  };
+
+  const toggleOther = async (opt) => {
+    try {
+      const willBeOther = !opt.is_other;
+      await onPatchOption(opt.id, { is_other: willBeOther });
+      if (willBeOther) {
+        await onCreateOtherCompanion?.(opt.value || 'Otro');
+      }
+    } catch (e) { alert(e.message || 'No se pudo actualizar la opción'); }
   };
 
   return (
@@ -25,6 +56,8 @@ export function QuestionBlock({ question, isDraft, onPatch, onDelete, onAddOptio
         )}
         {isDraft && (
           <div style={{ display: 'flex', gap: 4 }}>
+            <Btn variant='secondary' onClick={onMoveUp} disabled={!canMoveUp} title='Subir pregunta'>↑</Btn>
+            <Btn variant='secondary' onClick={onMoveDown} disabled={!canMoveDown} title='Bajar pregunta'>↓</Btn>
             <Btn variant='secondary' onClick={() => setEditing(e => !e)}>{editing ? 'Cancelar' : 'Editar'}</Btn>
             <Btn variant='danger' onClick={() => onDelete(question.id)}>Eliminar</Btn>
           </div>
@@ -49,6 +82,27 @@ export function QuestionBlock({ question, isDraft, onPatch, onDelete, onAddOptio
             </label>
             <Btn onClick={save}>Guardar</Btn>
           </div>
+          <div style={{ display: 'grid', gap: 6, background: '#f8fafc', padding: 8, borderRadius: 6, border: '1px solid #e2e8f0' }}>
+            <strong style={{ fontSize: 12 }}>Reglas de validación (JSON)</strong>
+            <textarea rows={3} placeholder='Por ejemplo: {"min":0, "max":100}'
+              value={editVals.validation_rules ? JSON.stringify(editVals.validation_rules) : ''}
+              onChange={e => {
+                const t = e.target.value;
+                if (!t.trim()) { setEditVals(v => ({ ...v, validation_rules: null })); return; }
+                try { const obj = JSON.parse(t); setEditVals(v => ({ ...v, validation_rules: obj })); }
+                catch { /* ignore parse errors while typing */ }
+              }} />
+            <small style={{ color: '#555' }}>Claves soportadas comunes: min, max, regex, minLength, maxLength. También se validan reglas de dominio en backend (ICFES, fechas, etc.).</small>
+            <strong style={{ fontSize: 12 }}>Visible si (JSON)</strong>
+            <textarea rows={2} placeholder='Por ejemplo: {"code":"otra_pregunta","equals":"Si"}'
+              value={editVals.visible_if ? JSON.stringify(editVals.visible_if) : ''}
+              onChange={e => {
+                const t = e.target.value;
+                if (!t.trim()) { setEditVals(v => ({ ...v, visible_if: null })); return; }
+                try { const obj = JSON.parse(t); setEditVals(v => ({ ...v, visible_if: obj })); }
+                catch { /* ignore */ }
+              }} />
+          </div>
         </div>
       ) : (
         <p style={{ fontSize: 13, margin: '6px 0' }}>{question.text}</p>
@@ -57,15 +111,35 @@ export function QuestionBlock({ question, isDraft, onPatch, onDelete, onAddOptio
         <div style={{ marginTop: 4 }}>
           <strong style={{ fontSize: 11 }}>Opciones</strong>
             <ul style={{ listStyle: 'none', padding: 0, margin: '4px 0', display: 'grid', gap: 4 }}>
-              {question.options.map(o => (
-                <OptionRow key={o.id} option={o} isDraft={isDraft} onPatch={onPatchOption} onDelete={onDeleteOption} />
+              {[...(question.options || [])].sort((a,b) => a.order - b.order || a.id - b.id).map((o, idx, arr) => (
+                <OptionRow key={o.id} option={o} isDraft={isDraft}
+                  canMoveUp={idx > 0} canMoveDown={idx < arr.length - 1}
+                  onMoveUp={() => reorderOptions(o.id, 'up')}
+                  onMoveDown={() => reorderOptions(o.id, 'down')}
+                  onPatch={(id, patch) => {
+                    // Intercept is_other toggles to create companion field
+                    if (Object.prototype.hasOwnProperty.call(patch, 'is_other')) {
+                      toggleOther(o);
+                    } else {
+                      onPatchOption(id, patch);
+                    }
+                  }}
+                  onDelete={onDeleteOption} />
               ))}
             </ul>
+            {isDraft && (question.options || []).some(o => o.is_other) && (
+              <div style={{ fontSize: 12, color: '#4b5563' }}>
+                Nota: Al marcar una opción como "Otro", se crea un campo de texto complementario visible sólo cuando se elige "Otro".
+              </div>
+            )}
           {isDraft && !addingOption && <Btn variant='secondary' onClick={() => setAddingOption(true)}>Agregar opción</Btn>}
           {isDraft && addingOption && (
             <form onSubmit={addOption} style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
               <input placeholder='Valor' value={newOpt.value} onChange={e => setNewOpt(o => ({ ...o, value: e.target.value }))} />
               <input placeholder='Etiqueta' value={newOpt.label} onChange={e => setNewOpt(o => ({ ...o, label: e.target.value }))} />
+              <label style={{ fontSize: 12, display: 'flex', gap: 4, alignItems: 'center' }}>
+                <input type='checkbox' checked={!!newOpt.is_other} onChange={e => setNewOpt(o => ({ ...o, is_other: e.target.checked }))} /> Opción "Otro"
+              </label>
               <Btn type='submit'>Guardar</Btn>
               <Btn type='button' variant='secondary' onClick={() => { setAddingOption(false); setNewOpt({ value: '', label: '' }); }}>Cancelar</Btn>
             </form>

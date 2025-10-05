@@ -15,10 +15,15 @@ import { UsersPanel } from './components/UsersPanel';
 export default function AdminApp() {
   const [refreshSignal, setRefreshSignal] = useState(0);
   const [openVersion, setOpenVersion] = useState(null);
+  const logout = async () => {
+    try { await fetch(`${(process.env.REACT_APP_ADMIN_API_BASE || 'http://localhost:5000/api')}/auth/admin/logout`, { method:'POST', credentials:'include' }); } catch (_) {}
+    try { localStorage.removeItem('admin_token'); } catch (_) {}
+    window.location.href = '/login';
+  };
 
   return (
     <div style={{ padding: '1.25rem', display: 'grid', gap: 24 }}>
-      <div className="animate-fade-in" style={{ textAlign: 'center' }}>
+      <div className="animate-fade-in" style={{ textAlign: 'center', position:'relative' }}>
         <h1
           style={{
             fontSize: '2rem',
@@ -32,6 +37,7 @@ export default function AdminApp() {
         >
           Administrador – Cuestionarios Dinámicos
         </h1>
+        <button onClick={logout} className='btn btn-secondary' style={{ position:'absolute', right:0, top:0 }}>Cerrar sesión</button>
         <p style={{ color: 'var(--text-muted)' }}>Crea, edita y publica cuestionarios. Administra usuarios por código.</p>
       </div>
       <div style={{ display: 'grid', gap: 24, gridTemplateColumns: openVersion ? '360px 1fr' : '380px 1fr' }}>

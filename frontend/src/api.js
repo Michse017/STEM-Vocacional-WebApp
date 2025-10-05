@@ -3,7 +3,7 @@ const API_BASE_URL = (typeof window !== "undefined" && (
   window.location.hostname.startsWith("127.") ||
   window.location.hostname.endsWith(".local")
 ))
-  ? "http://127.0.0.1:5000/api"
+  ? "http://localhost:5000/api"
   : "https://stem-backend-9sc0.onrender.com/api";
 
 /**
@@ -52,57 +52,8 @@ export const crearOObtenerUsuario = async (codigoEstudiante) => {
   return handleResponse(response);
 };
 
-/** Envía respuestas (parciales o completas) del cuestionario. */
-export const enviarCuestionario = async (cuestionarioData) => {
-  const response = await fetch(`${API_BASE_URL}/cuestionario`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(cuestionarioData),
-  });
-  return handleResponse(response);
-};
-
-/** Envía con keepalive (retorna booleano, no lanza errores). */
-export const enviarCuestionarioKeepAlive = async (cuestionarioData) => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/cuestionario`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      keepalive: true,
-      body: JSON.stringify(cuestionarioData),
-    });
-    return res.ok;
-  } catch (_) {
-    return false;
-  }
-};
-
-/** Obtiene respuestas guardadas del cuestionario para un usuario. */
-export const obtenerRespuestas = async (id_usuario) => {
-  const response = await fetch(`${API_BASE_URL}/usuarios/${id_usuario}/respuestas`, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
-  return handleResponse(response);
-};
-
-/** Finaliza el cuestionario de un usuario. */
-export const finalizarCuestionario = async (id_usuario, bodyData) => {
-  const response = await fetch(`${API_BASE_URL}/cuestionario/${id_usuario}/finalizar`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: bodyData ? JSON.stringify(bodyData) : undefined,
-  });
-  return handleResponse(response);
-};
+// Legacy questionnaire API functions removed: enviarCuestionario, enviarCuestionarioKeepAlive,
+// obtenerRespuestas, finalizarCuestionario. Dynamic engine is the primary path now.
 
 // --- Dynamic Questionnaire Public APIs ---
 
@@ -127,6 +78,11 @@ export const submitDynamicResponse = async (code, payload) => {
 
 export const getMyDynamicStatus = async (code, userCode) => {
   const res = await fetch(`${API_BASE_URL}/dynamic/questionnaires/${encodeURIComponent(code)}/mine?user_code=${encodeURIComponent(userCode)}`, { method: "GET" });
+  return handleResponse(res);
+};
+
+export const getDynamicOverview = async (userCode) => {
+  const res = await fetch(`${API_BASE_URL}/dynamic/overview?user_code=${encodeURIComponent(userCode || '')}`, { method: "GET" });
   return handleResponse(res);
 };
 

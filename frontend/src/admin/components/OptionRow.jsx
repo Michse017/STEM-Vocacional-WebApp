@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Btn } from './ui/Btn';
 
-export function OptionRow({ option, isDraft, onPatch, onDelete }) {
+export function OptionRow({ option, isDraft, canMoveUp, canMoveDown, onMoveUp, onMoveDown, onPatch, onDelete }) {
   const [editing, setEditing] = useState(false);
   const [vals, setVals] = useState({ value: option.value, label: option.label });
   const save = () => { onPatch(option.id, vals); setEditing(false); };
@@ -16,8 +16,11 @@ export function OptionRow({ option, isDraft, onPatch, onDelete }) {
         </span>
       ) : (
         <span style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
-          <code>{option.value}</code> – {option.label}
+          <code>{option.value}</code> – {option.label} {option.is_other ? <em style={{ color: '#6b7280' }}>(Otro)</em> : null}
           {isDraft && <>
+            <Btn variant='secondary' onClick={onMoveUp} disabled={!canMoveUp} title='Subir opción'>↑</Btn>
+            <Btn variant='secondary' onClick={onMoveDown} disabled={!canMoveDown} title='Bajar opción'>↓</Btn>
+            <Btn variant='secondary' onClick={() => onPatch(option.id, { is_other: !option.is_other })} title='Marcar/Desmarcar como "Otro"'>Otro</Btn>
             <Btn variant='secondary' onClick={() => setEditing(true)}>Editar</Btn>
             <Btn variant='danger' onClick={() => onDelete(option.id)}>X</Btn>
           </>}

@@ -3,6 +3,7 @@ Feature-flagged by ENABLE_DYNAMIC_QUESTIONNAIRES.
 Authentication/authorization NOT yet enforced (add later) – do NOT expose to production without guards.
 """
 from flask import Blueprint, request, jsonify, current_app
+from backend.services.auth_admin_service import require_admin
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 from database.controller import engine
@@ -29,19 +30,17 @@ def _error(msg, status=400, **extra):
 # --- Access control (shared secret via header) ---
 
 @admin_dynamic_bp.before_request
-def _require_admin_access_key():  # type: ignore[override]
-	"""Require X-Admin-Access header to match ADMIN_ACCESS_KEY when configured.
-	- Skips OPTIONS to allow CORS preflight.
-	- If ADMIN_ACCESS_KEY is empty/None, no enforcement (useful for local-only dev).
+def _admin_guard():  # type: ignore[override]
+	"""Guard all admin endpoints with JWT; optional fallback to header if enabled.
+	We reuse the require_admin logic by wrapping a no-op when needed.
 	"""
 	if request.method == "OPTIONS":
 		return None
-	configured_key = current_app.config.get("ADMIN_ACCESS_KEY")
-	if configured_key:
-		provided = request.headers.get("X-Admin-Access", "")
-		if provided != configured_key:
-			return jsonify({"error": "unauthorized"}), 401
-	return None
+	# Use the decorator's core enforcement by invoking a trivial function
+	@require_admin
+	def _ok():
+		return None
+	return _ok()
 
 def _serialize_version(version: QuestionnaireVersion):
 	"""Return full hierarchical structure for admin UI including IDs."""
@@ -81,6 +80,10 @@ def _serialize_version(version: QuestionnaireVersion):
 						"type": qu.type,
 						"required": qu.required,
 						"order": qu.order,
+						"validation_rules": qu.validation_rules,
+						"visible_if": qu.visible_if,
+						"is_computed": qu.is_computed,
+						"computed_expression": qu.computed_expression,
 						"options": [
 							{
 								"id": op.id,
@@ -117,6 +120,7 @@ def list_questionnaires_admin():
 				"code": q.code,
 				"title": q.title,
 				"status": q.status,
+				"is_primary": bool(getattr(q, 'is_primary', False)),
 				"versions": [
 					{
 						"id": v.id,
@@ -130,6 +134,37 @@ def list_questionnaires_admin():
 				]
 			})
 	return jsonify({"items": data})
+
+@admin_dynamic_bp.route("/admin/questionnaires/<code>/set-primary", methods=["POST"])
+def set_primary_questionnaire(code: str):
+	"""Mark a questionnaire as primary. Requires active status and a published version.
+
+	Body: { "primary": true|false }
+	If false, simply unsets this questionnaire if it's currently primary.
+	"""
+	if not _enabled():
+		return _error("dynamic_disabled", 404)
+	payload = request.get_json(force=True, silent=True) or {}
+	make_primary = bool(payload.get("primary", True))
+	with Session(engine) as s:
+		q = s.execute(select(Questionnaire).where(Questionnaire.code == code)).scalar_one_or_none()
+		if not q:
+			return _error("not_found", 404)
+		if make_primary:
+			# must be active and have a published version to be useful
+			if q.status != "active":
+				return _error("questionnaire_inactive", 409)
+			if not any(v.status == "published" for v in q.versions):
+				return _error("no_published_version", 409)
+			# block if another is already primary
+			other_primary = s.query(Questionnaire).filter(Questionnaire.is_primary == True, Questionnaire.code != q.code).first()
+			if other_primary:
+				return _error("another_primary_exists", 409, current_primary=other_primary.code)
+			q.is_primary = True
+		else:
+			q.is_primary = False
+		s.commit()
+		return jsonify({"message": "primary_updated", "code": q.code, "is_primary": bool(q.is_primary)})
 
 @admin_dynamic_bp.route("/usuarios", methods=["POST"])
 def admin_create_user():
@@ -147,13 +182,13 @@ def admin_create_user():
 			return jsonify({
 				"id_usuario": existing.id_usuario,
 				"codigo_estudiante": existing.codigo_estudiante,
-				"finalizado": getattr(existing, 'finalizado', False)
+				# finalizado (legacy) removed
 			})
 		nuevo = create_usuario(db, codigo)
 		return jsonify({
 			"id_usuario": nuevo.id_usuario,
 			"codigo_estudiante": nuevo.codigo_estudiante,
-			"finalizado": getattr(nuevo, 'finalizado', False)
+			# finalizado (legacy) removed
 		}), 201
 	except Exception as e:
 		db.rollback()
@@ -166,17 +201,31 @@ def create_questionnaire():
 	if not _enabled():
 		return _error("dynamic_disabled", 404)
 	payload = request.get_json(force=True, silent=True) or {}
-	code = (payload.get("code") or "").strip()
+	# Code becomes optional: auto-generate a unique slug from title when omitted
 	title = (payload.get("title") or "").strip()
 	description = (payload.get("description") or "").strip()
-	if not code or not title:
-		return _error("code_and_title_required")
-	if len(code) > 64:
-		return _error("code_too_long")
+	req_code = (payload.get("code") or "").strip()
+	if not title:
+		return _error("title_required")
+	# helper slugify
+	import re as _re
+	def _slugify(s):
+		s = s.lower().strip()
+		s = _re.sub(r"[^a-z0-9\-\s]", "", s)
+		s = _re.sub(r"\s+", "-", s)
+		s = _re.sub(r"-+", "-", s)
+		return s[:64] or "q"
 	with Session(engine) as s:
-		exists = s.execute(select(func.count()).select_from(Questionnaire).where(Questionnaire.code==code)).scalar()
-		if exists:
-			return _error("code_exists", 409)
+		# determine code
+		code = req_code or _slugify(title)
+		# ensure uniqueness by suffixing -2, -3 ...
+		base = code
+		i = 2
+		while s.execute(select(func.count()).select_from(Questionnaire).where(Questionnaire.code==code)).scalar():
+			code = f"{base}-{i}"
+			i += 1
+			if len(code) > 64:
+				code = code[:64]
 		q = Questionnaire(code=code, title=title, description=description)
 		# initial draft version number 1
 		v = QuestionnaireVersion(questionnaire=q, version_number=1, status="draft")
@@ -196,17 +245,22 @@ def clone_latest_published(code: str):
 		q = s.execute(select(Questionnaire).where(Questionnaire.code==code)).scalar_one_or_none()
 		if not q:
 			return _error("not_found", 404)
+		# Prefer latest published; if none, fallback to latest existing version
 		published = [v for v in q.versions if v.status == "published"]
-		if not published:
-			return _error("no_published_version", 409)
-		base = sorted(published, key=lambda v: v.version_number)[-1]
+		if published:
+			base = sorted(published, key=lambda v: v.version_number)[-1]
+		else:
+			if not q.versions:
+				return _error("no_versions", 409)
+			base = sorted(q.versions, key=lambda v: v.version_number)[-1]
 		new_number = max(v.version_number for v in q.versions) + 1
 		new_v = QuestionnaireVersion(questionnaire=q, version_number=new_number, status="draft")
 		s.add(new_v)  # add early to avoid SAWarning on relationship operations
 		# deep copy sections/questions/options
-		for sec in base.sections:
+		for sec in sorted(base.sections, key=lambda s2: s2.order):
 			new_sec = Section(version=new_v, title=sec.title, description=sec.description, order=sec.order, active_flag=sec.active_flag)
-			for qu in sec.questions:
+			s.add(new_sec)
+			for qu in sorted(sec.questions, key=lambda q2: q2.order):
 				new_q = Question(
 					section=new_sec,
 					code=qu.code,
@@ -220,8 +274,10 @@ def clone_latest_published(code: str):
 					computed_expression=qu.computed_expression,
 					active_flag=qu.active_flag
 				)
-				for op in qu.options:
-					Option(question=new_q, value=op.value, label=op.label, order=op.order, is_other_flag=op.is_other_flag, active_flag=op.active_flag)
+				s.add(new_q)
+				for op in sorted(qu.options, key=lambda o2: o2.order):
+					new_op = Option(question=new_q, value=op.value, label=op.label, order=op.order, is_other_flag=op.is_other_flag, active_flag=op.active_flag)
+					s.add(new_op)
 		s.commit()
 		return jsonify({
 			"message": "cloned",
@@ -320,36 +376,70 @@ def force_delete_version(version_id: int):
 
 @admin_dynamic_bp.route("/admin/versions/<int:version_id>", methods=["PATCH"])
 def patch_version(version_id: int):
-	"""Actualizar metadatos de la versión. Soporta archivar versiones publicadas.
-	Body: { "status": "archived" }
-	Regla: Solo se puede archivar si la versión está publicada. Archivar no elimina datos
-	y permite ocultar la versión del consumo público sin perder historial.
+	"""Actualizar metadatos de la versión.
+	Body: { "status": "draft" } para despublicar, o { "status": "published" } para publicar (demote siblings).
 	"""
 	if not _enabled():
 		return _error("dynamic_disabled", 404)
 	payload = request.get_json(force=True, silent=True) or {}
 	target_status = (payload.get("status") or "").strip()
-	if target_status not in ("archived", "published"):
+	if target_status not in ("draft", "published"):
 		return _error("invalid_status")
 	with Session(engine) as s:
 		v = s.get(QuestionnaireVersion, version_id)
 		if not v:
 			return _error("version_not_found", 404)
-		if target_status == "archived":
+		if target_status == "draft":
 			if v.status != "published":
-				return _error("only_published_can_be_archived", 409)
-			v.status = "archived"
-			v.valid_to = func.now()
-			s.commit()
-			return jsonify({"message": "version_archived", "version": {"id": v.id, "status": v.status}})
-		if target_status == "published":
-			if v.status != "archived":
-				return _error("only_archived_can_be_unarchived", 409)
-			v.status = "published"
+				return _error("only_published_can_be_unpublished", 409)
+			v.status = "draft"
+			v.valid_from = None
 			v.valid_to = None
 			s.commit()
-			return jsonify({"message": "version_unarchived", "version": {"id": v.id, "status": v.status}})
+			return jsonify({"message": "version_unpublished", "version": {"id": v.id, "status": v.status}})
+		if target_status == "published":
+			if v.status != "draft":
+				return _error("not_draft", 409)
+			# Demote siblings
+			siblings = v.questionnaire.versions if v.questionnaire else []
+			for sibl in siblings:
+				if sibl.id != v.id and sibl.status == "published":
+					sibl.status = "draft"
+					sibl.valid_from = None
+					sibl.valid_to = None
+			v.status = "published"
+			v.valid_from = func.now()
+			s.commit()
+			return jsonify({"message": "published", "version": {"id": v.id, "status": v.status}})
 	return _error("unsupported_operation", 409)
+
+@admin_dynamic_bp.route("/admin/versions/<int:version_id>/clone", methods=["POST"])
+def clone_version(version_id: int):
+	"""Clona una versión específica a un nuevo borrador del mismo cuestionario."""
+	if not _enabled():
+		return _error("dynamic_disabled", 404)
+	with Session(engine) as s:
+		base = s.get(QuestionnaireVersion, version_id)
+		if not base:
+			return _error("version_not_found", 404)
+		q = base.questionnaire
+		if not q:
+			return _error("questionnaire_not_found", 404)
+		new_number = (max(v.version_number for v in q.versions) + 1) if q.versions else 1
+		new_v = QuestionnaireVersion(questionnaire=q, version_number=new_number, status="draft")
+		s.add(new_v)
+		for sec in sorted(base.sections, key=lambda s2: s2.order):
+			new_sec = Section(version=new_v, title=sec.title, description=sec.description, order=sec.order, active_flag=sec.active_flag)
+			s.add(new_sec)
+			for qu in sorted(sec.questions, key=lambda q2: q2.order):
+				new_q = Question(section=new_sec, code=qu.code, text=qu.text, type=qu.type, required=qu.required, order=qu.order,
+								  validation_rules=qu.validation_rules, visible_if=qu.visible_if,
+								  is_computed=qu.is_computed, computed_expression=qu.computed_expression, active_flag=qu.active_flag)
+				s.add(new_q)
+				for op in sorted(qu.options, key=lambda o2: o2.order):
+					s.add(Option(question=new_q, value=op.value, label=op.label, order=op.order, is_other_flag=op.is_other_flag, active_flag=op.active_flag))
+		s.commit()
+		return jsonify({"message": "cloned", "version": {"id": new_v.id, "number": new_v.version_number, "status": new_v.status}}), 201
 
 # --- Sections ---
 
@@ -464,6 +554,13 @@ def publish_version(version_id: int):
 				codes.append(q.code)
 		if len(codes) != len(set(codes)):
 			return _error("duplicate_codes", 409)
+		# Demote other published siblings to draft
+		siblings = v.questionnaire.versions if v.questionnaire else []
+		for sibl in siblings:
+			if sibl.id != v.id and sibl.status == "published":
+				sibl.status = "draft"
+				sibl.valid_from = None
+				sibl.valid_to = None
 		v.status = "published"
 		v.valid_from = func.now()
 		s.commit()
@@ -580,8 +677,55 @@ def patch_option(option_id: int):
 			op.value = payload["value"]
 		if "order" in payload and isinstance(payload.get("order"), int):
 			op.order = payload["order"]
+		if "is_other" in payload:
+			op.is_other_flag = bool(payload.get("is_other"))
 		s.commit()
 		return jsonify({"message": "option_updated"})
+
+@admin_dynamic_bp.route("/admin/versions/<int:version_id>/insert-icfes-package", methods=["POST"])
+def insert_icfes_package(version_id: int):
+	"""Insert a standard ICFES section with 5 component score questions (0..100)
+	and an optional global score question (0..500).
+
+	Codes created:
+	- puntaje_lectura_critica
+	- puntaje_matematicas
+	- puntaje_sociales_ciudadanas
+	- puntaje_ciencias_naturales
+	- puntaje_ingles
+	- puntaje_global_saber11 (optional, computed/optional)
+	"""
+	if not _enabled():
+		return _error("dynamic_disabled", 404)
+	payload = request.get_json(silent=True) or {}
+	include_global = bool(payload.get("include_global", True))
+	with Session(engine) as s:
+		v = s.get(QuestionnaireVersion, version_id)
+		if not v:
+			return _error("version_not_found", 404)
+		if v.status != "draft":
+			return _error("version_not_draft", 409)
+		# Determine next section order
+		existing_orders = [sec.order for sec in v.sections]
+		order = (max(existing_orders)+1) if existing_orders else 1
+		sec = Section(version=v, title="Resultados ICFES Saber 11", description="Ingrese sus puntajes por componente (0-100). El puntaje global se calcula automáticamente.", order=order, active_flag=True)
+		s.add(sec)
+		def _add_q(code, text, q_order):
+			q = Question(section=sec, code=code, text=text, type="number", required=False, order=q_order,
+						validation_rules={"min": 0, "max": 100})
+			s.add(q)
+			return q
+		q1 = _add_q("puntaje_lectura_critica", "Puntaje Lectura Crítica (0-100)", 1)
+		q2 = _add_q("puntaje_matematicas", "Puntaje Matemáticas (0-100)", 2)
+		q3 = _add_q("puntaje_sociales_ciudadanas", "Puntaje Sociales y Ciudadanas (0-100)", 3)
+		q4 = _add_q("puntaje_ciencias_naturales", "Puntaje Ciencias Naturales (0-100)", 4)
+		q5 = _add_q("puntaje_ingles", "Puntaje Inglés (0-100)", 5)
+		if include_global:
+			qg = Question(section=sec, code="puntaje_global_saber11", text="Puntaje Global Saber 11 (0-500)", type="number", required=False, order=6,
+						validation_rules={"min": 0, "max": 500}, is_computed=False)
+			s.add(qg)
+		s.commit()
+		return jsonify({"message": "icfes_inserted", "section": {"id": sec.id, "title": sec.title}}), 201
 
 @admin_dynamic_bp.route("/admin/options/<int:option_id>", methods=["DELETE"])
 def delete_option(option_id: int):

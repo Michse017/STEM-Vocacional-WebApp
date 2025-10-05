@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { listDynamicQuestionnaires } from "../api";
+import { getDynamicOverview } from "../api";
 
 export default function DynamicList() {
   const location = useLocation();
@@ -22,8 +22,26 @@ export default function DynamicList() {
     let mounted = true;
     (async () => {
       try {
-        const data = await listDynamicQuestionnaires();
-        if (mounted) setItems(data?.items || []);
+        const ov = await getDynamicOverview(usuario?.codigo_estudiante || '');
+        if (!mounted) return;
+        const arr = [];
+        if (ov?.primary?.questionnaire) {
+          const q = ov.primary.questionnaire;
+          arr.push({
+            code: q.code,
+            title: q.title,
+            status: ov.primary.user?.status || 'new',
+            progress_percent: (() => {
+              const total = (q.sections || []).reduce((acc, s) => acc + (s.questions?.length || 0), 0);
+              const answered = ov.primary.user?.answers ? Object.keys(ov.primary.user.answers).length : 0;
+              const p = total > 0 ? Math.round((answered / total) * 100) : 0;
+              return (ov.primary.user?.status === 'finalized') ? 100 : p;
+            })(),
+            finalized_at: null,
+          });
+        }
+        for (const i of (ov?.items || [])) arr.push(i);
+        setItems(arr);
       } catch (e) {
         if (mounted) setError(e.message || "No se pudo cargar la lista.");
       } finally {
@@ -48,14 +66,15 @@ export default function DynamicList() {
               <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", gap:"1rem"}}>
                 <div>
                   <div style={{fontWeight:600}}>{q.title || q.code}</div>
-                  <div style={{fontSize:"0.875rem", color:"var(--text-muted)"}}>Código: {q.code} · Estado: {q.status}</div>
+                  <div style={{fontSize:"0.875rem", color:"var(--text-muted)"}}>Código: {q.code} · Estado: {q.status} · Progreso: {q.progress_percent ?? 0}%</div>
+                  <div className="progress-container" style={{ marginTop: 6 }}><div className="progress-bar" style={{ width: `${q.progress_percent ?? 0}%` }}></div></div>
                 </div>
                 <Link
                   to={`/dynamic/${encodeURIComponent(q.code)}`}
                   state={{ usuario }}
                   className="btn btn-primary"
                 >
-                  Responder
+                  {q.status === 'finalized' ? 'Revisar' : ( (q.progress_percent ?? 0) > 0 ? 'Continuar' : 'Responder')}
                 </Link>
               </div>
             </li>

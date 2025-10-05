@@ -6,7 +6,7 @@ They are added to the same SQLAlchemy Base so tables get created idempotently.
 Use the environment variable ENABLE_DYNAMIC_QUESTIONNAIRES=1 to activate related blueprints.
 """
 from sqlalchemy import (
-    Column, Integer, String, DateTime, Boolean, ForeignKey, Text, UniqueConstraint, JSON
+    Column, Integer, String, DateTime, Boolean, ForeignKey, Text, UniqueConstraint, JSON, inspect, text
 )
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -21,6 +21,8 @@ class Questionnaire(Base):
     title = Column(String(200), nullable=False)
     description = Column(Text)
     status = Column(String(20), nullable=False, default="active")  # active|inactive
+    # Flag to mark the primary questionnaire (at most one should be true)
+    is_primary = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -144,4 +146,25 @@ class ChangeLog(Base):
     after_json = Column(JSON)
     actor = Column(String(64))
     created_at = Column(DateTime, server_default=func.now(), index=True)
+
+
+# --- Minimal schema guard for incremental changes ---
+
+def ensure_dynamic_schema(db_engine):
+    """Ensure new columns exist without a full migration tool.
+
+    Currently adds dq_questionnaire.is_primary if missing.
+    Safe to run on startup; no-op if column already exists.
+    """
+    try:
+        inspector = inspect(db_engine)
+        cols = inspector.get_columns("dq_questionnaire")
+        col_names = {c.get("name") or c.get("column_name") for c in cols}
+        if "is_primary" not in col_names:
+            with db_engine.begin() as conn:
+                # SQL Server BIT type for boolean; default 0
+                conn.execute(text("ALTER TABLE dq_questionnaire ADD is_primary BIT NOT NULL CONSTRAINT DF_dq_questionnaire_is_primary DEFAULT 0"))
+    except Exception:
+        # Don't crash app if we can't alter schema; feature will behave as False
+        pass
 

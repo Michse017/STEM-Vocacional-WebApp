@@ -7,6 +7,7 @@
   --surface: #f8fafc;
   --text: #1a202c;
   --text-muted: #4a5568;
+  --text-muted-light: #718096;
   --border: #e2e8f0;
   --border-hover: #cbd5e0;
   --shadow: rgba(0, 0, 0, 0.1);
@@ -109,6 +110,21 @@ main {
 .btn-success:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 20px rgba(72, 187, 120, 0.4);
+}
+
+/* Badges */
+.badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+}
+.badge-primary {
+  background: rgba(0, 112, 243, 0.1);
+  color: var(--primary-color);
+  border: 1px solid rgba(0, 112, 243, 0.2);
 }
 
 /* Danger button variant for admin destructive actions */

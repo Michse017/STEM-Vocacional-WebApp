@@ -52,12 +52,18 @@ def get_database_url(interactive=False):
 from sqlalchemy import create_engine, URL
 
 def create_sqlalchemy_engine():
-    """Crea el motor de SQLAlchemy (pymssql)."""
+    """Crea el motor de SQLAlchemy. Intenta pymssql y cae a pyodbc si falla.
+
+    Razón: en Windows/Python recientes (p. ej. 3.13), pymssql puede no estar disponible.
+    En ese caso, usamos ODBC (driver 17/18) con URL pyodbc.
+    """
+    password = get_password()
+    # Intento 1: pymssql
     try:
         connection_url = URL.create(
             "mssql+pymssql",
             username=DB_USER,
-            password=get_password(),
+            password=password,
             host=DB_SERVER,
             port=DB_PORT,
             database=DB_DATABASE,
@@ -76,8 +82,25 @@ def create_sqlalchemy_engine():
             echo=False,
         )
     except Exception as e:
-        print(f"❌ Error al crear el motor de SQLAlchemy: {e}", file=sys.stderr)
-        sys.exit(1)
+        print(f"⚠️ pymssql no disponible o falló la conexión: {e}", file=sys.stderr)
+        print("Intentando fallback con pyodbc...", file=sys.stderr)
+        try:
+            # Construir URL pyodbc desde helper ya preparado para ODBC
+            odbc_url = get_database_url(interactive=False)
+            return create_engine(
+                odbc_url,
+                pool_size=5,
+                max_overflow=10,
+                pool_timeout=30,
+                pool_recycle=3600,
+                pool_pre_ping=True,
+                echo=False,
+            )
+        except Exception as e2:
+            print(f"❌ Error al crear el motor con pyodbc: {e2}", file=sys.stderr)
+            print("Sugerencias: asegúrate de instalar 'pyodbc' (pip) y el ODBC Driver 17 o 18 para SQL Server.", file=sys.stderr)
+            print("En Windows, instala: https://learn.microsoft.com/sql/connect/odbc/windows/release-notes-odbc-sql-server", file=sys.stderr)
+            sys.exit(1)
 
 engine = create_sqlalchemy_engine()
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

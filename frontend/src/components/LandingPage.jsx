@@ -1,13 +1,26 @@
-import { useState } from "react"
-import { Link } from "react-router-dom"
+import { useEffect, useState } from "react"
+import { Link, useNavigate } from "react-router-dom"
 
 export default function LandingPage() {
   const [darkMode, setDarkMode] = useState(false)
+  const navigate = useNavigate()
 
   const toggleDarkMode = () => {
     setDarkMode(!darkMode)
     document.body.classList.toggle("dark-mode")
   }
+
+  // If a session exists, immediately redirect away from landing
+  useEffect(() => {
+    try {
+      const adminToken = localStorage.getItem('admin_token')
+      if (adminToken) { navigate('/admin', { replace: true }); return }
+    } catch (_) {}
+    try {
+      const u = JSON.parse(sessionStorage.getItem('usuario') || 'null')
+      if (u && u.id_usuario) { navigate('/dashboard', { replace: true }); }
+    } catch (_) {}
+  }, [navigate])
 
   return (
     <div

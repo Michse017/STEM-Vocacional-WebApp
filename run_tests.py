@@ -152,7 +152,7 @@ def check_imports():
         ('database.config', 'Configuración de BD'),
         ('database.controller', 'Controlador de BD'),
         ('backend.app', 'Aplicación Flask'),
-        ('backend.controllers.usuario_controller', 'Controlador de Usuario')
+        ('backend.routes.usuario_routes', 'Rutas de Usuario')
     ]
     
     for module_name, description in modules_to_test:

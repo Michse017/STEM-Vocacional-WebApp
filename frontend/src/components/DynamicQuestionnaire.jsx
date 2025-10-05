@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { getDynamicQuestionnaire, getMyDynamicStatus, saveDynamicResponse, finalizeDynamicResponse, saveDynamicResponseKeepAlive } from "../api";
 
 function InputForQuestion({ q, value, onChange, disabled }) {
-  const common = { style: { width:"100%" }, disabled: !!disabled };
+  const common = { className: "form-control", style: { width:"100%" }, disabled: !!disabled };
   switch (q.type) {
     case "textarea":
       return <textarea {...common} value={value || ""} onChange={e => onChange(e.target.value)} rows={3} />;
@@ -14,8 +14,12 @@ function InputForQuestion({ q, value, onChange, disabled }) {
     case "boolean":
       return (
         <div style={{display:"flex", gap:"1rem"}}>
-          <label><input type="radio" disabled={!!disabled} checked={value === true} onChange={() => onChange(true)} /> Sí</label>
-          <label><input type="radio" disabled={!!disabled} checked={value === false} onChange={() => onChange(false)} /> No</label>
+          <label style={{display:"flex", alignItems:"center", gap:"0.5rem"}}>
+            <input type="radio" disabled={!!disabled} checked={value === true} onChange={() => onChange(true)} /> Sí
+          </label>
+          <label style={{display:"flex", alignItems:"center", gap:"0.5rem"}}>
+            <input type="radio" disabled={!!disabled} checked={value === false} onChange={() => onChange(false)} /> No
+          </label>
         </div>
       );
     case "single_choice":
@@ -73,6 +77,7 @@ export default function DynamicQuestionnaire() {
   const [submitMsg, setSubmitMsg] = useState("");
   const [submitErr, setSubmitErr] = useState("");
   const [finalized, setFinalized] = useState(false);
+  const [openSections, setOpenSections] = useState({});
 
   useEffect(() => {
     let mounted = true;
@@ -94,9 +99,48 @@ export default function DynamicQuestionnaire() {
       }
     })();
     return () => { mounted = false; };
-  }, [code]);
+  }, [code, usuario?.codigo_estudiante]);
 
-  // (If needed later) You can compute a flattened list of questions here.
+  // Client-side visibility evaluator (mirrors backend simple rules)
+  const evalVisible = (rule, vals) => {
+    if (!rule) return true;
+    if (typeof rule !== 'object') return true;
+    if (Array.isArray(rule.and)) return rule.and.every(r => evalVisible(r, vals));
+    if (Array.isArray(rule.or)) return rule.or.some(r => evalVisible(r, vals));
+    const code = rule.code;
+    if (code) {
+      const expected = rule.equals;
+      return (vals ?? {})[code] === expected;
+    }
+    return true;
+  };
+
+  // Derive which sections have at least one visible question
+  const visibleMap = useMemo(() => {
+    const map = {};
+    if (!data?.sections) return map;
+    for (const sec of data.sections) {
+      const vqs = (sec.questions || []).filter(q => evalVisible(q.visible_if, answers));
+      map[sec.id] = vqs.map(q => q.id);
+    }
+    return map;
+  }, [data, answers]);
+
+  // Initialize open state on first load to open first section that has visible questions
+  useEffect(() => {
+    if (!data?.sections?.length) return;
+    setOpenSections(prev => {
+      if (Object.keys(prev).length) return prev;
+      const next = {};
+      let opened = false;
+      for (const sec of data.sections) {
+        const hasVisible = (visibleMap[sec.id] || []).length > 0;
+        next[sec.id] = !opened && hasVisible; // open the first visible one
+        if (!opened && hasVisible) opened = true;
+      }
+      return next;
+    });
+  }, [data, visibleMap]);
 
   const handleChange = (qcode, val) => {
     setAnswers(prev => ({ ...prev, [qcode]: val }));
@@ -138,50 +182,76 @@ export default function DynamicQuestionnaire() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [finalized, answers, code, usuario, userCode]);
 
-  if (loading) return <div className="card" style={{padding:"1rem"}}>Cargando...</div>;
-  if (error) return <div className="card" style={{padding:"1rem", color:"crimson"}}>{error}</div>;
-  if (!data) return <div className="card" style={{padding:"1rem"}}>No encontrado.</div>;
+  if (loading) return <div className="cuestionario-container"><div className="card" style={{padding:"1rem"}}>Cargando...</div></div>;
+  if (error) return <div className="cuestionario-container"><div className="card" style={{padding:"1rem", color:"crimson"}}>{error}</div></div>;
+  if (!data) return <div className="cuestionario-container"><div className="card" style={{padding:"1rem"}}>No encontrado.</div></div>;
 
   return (
-    <div className="card" style={{padding:"1.25rem"}}>
-      <button className="btn btn-secondary" onClick={() => navigate(-1)} style={{marginBottom:"1rem"}}>Volver</button>
-      <h2 style={{marginBottom:"0.5rem"}}>{data.title || code}</h2>
-      <div style={{fontSize:"0.875rem", color:"var(--text-muted)", marginBottom:"1rem"}}>Versión #{data.version_number} · Estado {data.status}</div>
-      {finalized && (
-        <div className="alert alert-success" style={{marginBottom:"1rem"}}>
-          Este cuestionario fue finalizado. Estás en modo solo lectura.
-        </div>
-      )}
-
-  <form onSubmit={(e) => e.preventDefault()} style={{display:"flex", flexDirection:"column", gap:"1rem"}}>
-        <div className="card" style={{padding:"1rem"}}>
-          <label style={{fontWeight:600}}>Código de estudiante (opcional)</label>
-          <input type="text" value={userCode} onChange={e => setUserCode(e.target.value)} placeholder="Ej: A00123456" disabled={finalized} />
-        </div>
-
-        {data.sections?.map(sec => (
-          <div key={sec.id} className="card" style={{padding:"1rem"}}>
-            <h3 style={{marginBottom:"0.5rem"}}>{sec.title}</h3>
-            <div style={{display:"flex", flexDirection:"column", gap:"0.75rem"}}>
-              {sec.questions?.map(q => (
-                <div key={q.id}>
-                  <label style={{display:"block", fontWeight:600, marginBottom:"0.25rem"}}>{q.text} {q.required && <span style={{color:"crimson"}}>*</span>}</label>
-                  <InputForQuestion q={q} value={answers[q.code]} onChange={v => handleChange(q.code, v)} disabled={finalized} />
-                </div>
-              ))}
-            </div>
+    <div className="cuestionario-container">
+      <div className="card" style={{padding:"1.25rem"}}>
+        <button className="btn btn-secondary" onClick={() => navigate(-1)} style={{marginBottom:"1rem"}}>Volver</button>
+        <h2 style={{marginBottom:"0.5rem"}}>{data.title || code}</h2>
+        <div style={{fontSize:"0.875rem", color:"var(--text-muted)", marginBottom:"1rem"}}>Versión #{data.version_number} · Estado {data.status}</div>
+        {finalized && (
+          <div className="alert alert-success" style={{marginBottom:"1rem"}}>
+            Este cuestionario fue finalizado. Estás en modo solo lectura.
           </div>
-        ))}
+        )}
 
-        {submitErr && <div className="alert alert-error">{submitErr}</div>}
-        {submitMsg && <div className="alert alert-success">{submitMsg}</div>}
+        <form onSubmit={(e) => e.preventDefault()} style={{display:"flex", flexDirection:"column", gap:"1rem"}}>
+          <div className="card" style={{padding:"1rem"}}>
+            <label style={{fontWeight:600, display:"block", marginBottom:"0.5rem"}}>Código de estudiante (opcional)</label>
+            <input className="form-control" type="text" value={userCode} onChange={e => setUserCode(e.target.value)} placeholder="Ej: A00123456" disabled={finalized} />
+          </div>
 
-        <div style={{display:"flex", gap:"1rem", flexWrap:"wrap"}}>
-          <button type="button" className="btn btn-secondary" onClick={handleSave} disabled={finalized}>Guardar</button>
-          <button type="button" className="btn btn-primary" onClick={handleFinalize} disabled={finalized}>Finalizar</button>
-          <button type="button" className="btn" onClick={() => navigate("/dynamic", { state: { usuario } })}>{finalized ? "Volver" : "Cancelar"}</button>
-        </div>
-      </form>
+          {data.sections?.map(sec => {
+            const visibleQIds = visibleMap[sec.id] || [];
+            const hasVisible = visibleQIds.length > 0;
+            if (!hasVisible) return null;
+            const isOpen = !!openSections[sec.id];
+            const answeredInSec = (sec.questions || []).filter(q => visibleQIds.includes(q.id)).reduce((acc, q) => acc + (answers[q.code] !== undefined && answers[q.code] !== "" ? 1 : 0), 0);
+            const totalInSec = visibleQIds.length;
+            return (
+              <fieldset key={sec.id} className="accordion-section">
+                <legend onClick={() => setOpenSections(prev => ({ ...prev, [sec.id]: !isOpen }))} aria-expanded={isOpen}>
+                  <span>{sec.title}</span>
+                  <span style={{display:"flex", alignItems:"center", gap:"0.75rem"}}>
+                    <span style={{fontSize:"0.9rem", color:"var(--text-muted)"}}>{answeredInSec}/{totalInSec}</span>
+                    <span className="accordion-icon" style={{transform: isOpen ? "rotate(90deg)" : "rotate(0deg)"}}>›</span>
+                  </span>
+                </legend>
+                {isOpen && (
+                  <div className="fieldset-content">
+                    <div style={{display:"flex", flexDirection:"column", gap:"0.75rem"}}>
+                      {sec.questions?.filter(q => visibleQIds.includes(q.id)).map(q => (
+                        <div key={q.id}>
+                          <label style={{display:"block", fontWeight:600, marginBottom:"0.25rem"}}>
+                            {q.text} {q.required && <span style={{color:"crimson"}}>*</span>}
+                          </label>
+                          <InputForQuestion q={q} value={answers[q.code]} onChange={v => handleChange(q.code, v)} disabled={finalized} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </fieldset>
+            );
+          })}
+
+          {submitErr && <div className="alert alert-error">{submitErr}</div>}
+          {submitMsg && <div className="alert alert-success">{submitMsg}</div>}
+
+          <div style={{display:"flex", gap:"1rem", flexWrap:"wrap"}}>
+            {!finalized && (
+              <>
+                <button type="button" className="btn btn-secondary" onClick={handleSave}>Guardar</button>
+                <button type="button" className="btn btn-primary" onClick={handleFinalize}>Finalizar</button>
+              </>
+            )}
+            <button type="button" className="btn" onClick={() => navigate("/dashboard", { state: { usuario } })}>{finalized ? "Volver al Dashboard" : "Cancelar"}</button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
