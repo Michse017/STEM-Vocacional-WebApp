@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { api } from '../api';
+import { api, deleteQuestionnaire } from '../api';
 
 export function QuestionnaireList({ onSelectVersion, refreshSignal, onError, onInfo }) {
   const [items, setItems] = useState([]);
@@ -55,6 +55,32 @@ export function QuestionnaireList({ onSelectVersion, refreshSignal, onError, onI
     catch (e) { onError?.(e.message); }
   };
 
+  const removeQuestionnaire = async (code) => {
+    if (!window.confirm(`Eliminar cuestionario "${code}"?\nNota: Debes borrar o despublicar todas las versiones primero.`)) return;
+    try {
+      await deleteQuestionnaire(code);
+      await load();
+      onInfo?.('Cuestionario eliminado');
+    } catch (e) {
+      const msg = (e?.message || '').includes('has_published_version')
+        ? 'No puedes eliminar: tiene al menos una versión publicada'
+        : (e?.message || 'Error al eliminar cuestionario');
+      onError?.(msg);
+    }
+  };
+
+  const createNewVersion = async (code) => {
+    try {
+      const res = await api(`/admin/questionnaires/${encodeURIComponent(code)}/new-version`, { method: 'POST' });
+      await load();
+      const id = res?.version?.id;
+      if (id) onSelectVersion?.(id);
+      onInfo?.('Nueva versión creada');
+    } catch (e) {
+      onError?.(e.message || 'No se pudo crear la nueva versión');
+    }
+  };
+
   // Eliminación de versiones se realiza dentro del editor de versión para mantener la lista limpia.
 
   return (
@@ -75,11 +101,13 @@ export function QuestionnaireList({ onSelectVersion, refreshSignal, onError, onI
               <div className="q-actions">
                 <span className={`badge badge-${q.status}`}>{q.status}</span>
                 <button className='btn btn-secondary btn-sm' onClick={() => toggleOpen(q.code, q.status)} title='Abrir cuestionario'>Abrir</button>
+                <button className='btn btn-secondary btn-sm' onClick={() => createNewVersion(q.code)} title='Crear nueva versión'>Nueva versión</button>
                 {!q.is_primary ? (
                   <button className='btn btn-primary btn-sm' onClick={() => setPrimary(q.code, true)} title='Marcar como principal'>Principal</button>
                 ) : (
                   <button className='btn btn-secondary btn-sm' onClick={() => setPrimary(q.code, false)} title='Quitar principal'>Quitar principal</button>
                 )}
+                <button className='btn btn-danger btn-sm' onClick={() => removeQuestionnaire(q.code)} title='Eliminar cuestionario'>Eliminar</button>
               </div>
             </div>
             {openCodes[q.code] && q.versions?.length > 0 && (

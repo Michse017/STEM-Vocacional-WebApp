@@ -2,6 +2,8 @@
 """
 from flask import Blueprint, jsonify, current_app, request
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import selectinload
+from time import time
 from database.controller import engine
 from database.dynamic_models import (
 	Questionnaire, QuestionnaireVersion, Section, Question, Option,
@@ -13,6 +15,19 @@ from sqlalchemy import desc
 from sqlalchemy.sql import func
 
 dynamic_questionnaire_bp = Blueprint("dynamic_questionnaire", __name__)
+
+# --- Tiny in-process cache for serialized versions (reduces rework within short bursts) ---
+_SER_CACHE = {}
+_SER_TTL_SECONDS = 10
+
+def _serialize_version_cached(version: "QuestionnaireVersion"):
+	now = time()
+	entry = _SER_CACHE.get(version.id)
+	if entry and (now - entry[0] < _SER_TTL_SECONDS):
+		return entry[1]
+	payload = _serialize_version(version)
+	_SER_CACHE[version.id] = (now, payload)
+	return payload
 
 @dynamic_questionnaire_bp.route("/dynamic/overview", methods=["GET"])
 def dynamic_overview():
@@ -30,12 +45,17 @@ def dynamic_overview():
 	with Session(engine) as s:
 		# Primary
 		primary_payload = {"questionnaire": None, "user": None}
-		q_primary = s.query(Questionnaire).filter(Questionnaire.is_primary == True, Questionnaire.status == "active").first()
+		q_primary = (
+			s.query(Questionnaire)
+			.options(selectinload(Questionnaire.versions).selectinload(QuestionnaireVersion.sections).selectinload(Section.questions).selectinload(Question.options))
+			.filter(Questionnaire.is_primary == True, Questionnaire.status == "active")
+			.first()
+		)
 		if q_primary:
 			versions_sorted = sorted(q_primary.versions, key=lambda v: v.version_number, reverse=True)
 			v_primary = next((v for v in versions_sorted if v.status == "published"), versions_sorted[0] if versions_sorted else None)
 			if v_primary:
-				primary_payload["questionnaire"] = _serialize_version(v_primary)
+				primary_payload["questionnaire"] = _serialize_version_cached(v_primary)
 				if user_code:
 					assign = s.query(QuestionnaireAssignment).filter_by(user_code=user_code, questionnaire_version_id=v_primary.id).order_by(desc(QuestionnaireAssignment.last_activity_at)).first()
 					if assign:
@@ -55,7 +75,12 @@ def dynamic_overview():
 						primary_payload["user"] = {"status": assign.status, "answers": answers}
 		# Items for user
 		result_items = []
-		qs = s.query(Questionnaire).filter(Questionnaire.status == "active").all()
+		qs = (
+			s.query(Questionnaire)
+			.options(selectinload(Questionnaire.versions).selectinload(QuestionnaireVersion.sections).selectinload(Section.questions))
+			.filter(Questionnaire.status == "active")
+			.all()
+		)
 		for q in qs:
 			if getattr(q, 'is_primary', False):
 				continue
@@ -100,7 +125,12 @@ def list_questionnaires():
 	if not _feature_enabled():
 		return jsonify({"message": "Dynamic questionnaires disabled"}), 404
 	with Session(engine) as session:
-		qs = session.query(Questionnaire).filter(Questionnaire.status == "active").all()
+		qs = (
+			session.query(Questionnaire)
+			.options(selectinload(Questionnaire.versions))
+			.filter(Questionnaire.status == "active")
+			.all()
+		)
 		data = []
 		for q in qs:
 			# Ocultar el cuestionario principal del listado público
@@ -118,14 +148,19 @@ def get_primary_questionnaire():
 	if not _feature_enabled():
 		return jsonify({"message": "Dynamic questionnaires disabled"}), 404
 	with Session(engine) as session:
-		q = session.query(Questionnaire).filter(Questionnaire.is_primary == True, Questionnaire.status == "active").first()
+		q = (
+			session.query(Questionnaire)
+			.options(selectinload(Questionnaire.versions).selectinload(QuestionnaireVersion.sections).selectinload(Section.questions).selectinload(Question.options))
+			.filter(Questionnaire.is_primary == True, Questionnaire.status == "active")
+			.first()
+		)
 		if not q:
 			return jsonify({"error": "not_found"}), 404
 		versions_sorted = sorted(q.versions, key=lambda v: v.version_number, reverse=True)
 		version = next((v for v in versions_sorted if v.status == "published"), versions_sorted[0] if versions_sorted else None)
 		if not version:
 			return jsonify({"error": "no_versions"}), 404
-		structure = _serialize_version(version)
+		structure = _serialize_version_cached(version)
 	return jsonify({"questionnaire": structure})
 
 @dynamic_questionnaire_bp.route("/dynamic/questionnaires/<code>", methods=["GET"])
@@ -133,7 +168,12 @@ def get_questionnaire(code: str):
 	if not _feature_enabled():
 		return jsonify({"message": "Dynamic questionnaires disabled"}), 404
 	with Session(engine) as session:
-		q = session.query(Questionnaire).filter_by(code=code).first()
+		q = (
+			session.query(Questionnaire)
+			.options(selectinload(Questionnaire.versions).selectinload(QuestionnaireVersion.sections).selectinload(Section.questions).selectinload(Question.options))
+			.filter_by(code=code)
+			.first()
+		)
 		if not q:
 			return jsonify({"error": "not_found"}), 404
 		# prefer latest published; if none, fallback to latest draft
@@ -141,7 +181,7 @@ def get_questionnaire(code: str):
 		version = next((v for v in versions_sorted if v.status == "published"), versions_sorted[0] if versions_sorted else None)
 		if not version:
 			return jsonify({"error": "no_versions"}), 404
-		structure = _serialize_version(version)
+		structure = _serialize_version_cached(version)
 	return jsonify({"questionnaire": structure})
 
 @dynamic_questionnaire_bp.route("/dynamic/questionnaires/<code>/responses", methods=["POST"])
@@ -279,8 +319,35 @@ def save_response(code: str):
 			resp = Response(assignment_id=assign.id)
 			s.add(resp)
 			s.flush()
-		# validation (non-strict for save): coerce types but ignore required errors
-		_, _, normalized = validate_answers(target_version, answers)
+		# validation with strict partial rules: block certain critical errors
+		ok, errs, normalized = validate_answers(target_version, answers)
+		# Determine critical errors that must block save
+		icfes_codes = {
+			"puntaje_lectura_critica",
+			"puntaje_matematicas",
+			"puntaje_sociales_ciudadanas",
+			"puntaje_ciencias_naturales",
+			"puntaje_ingles",
+			"puntaje_global_saber11",
+		}
+		date_errs = {"invalid_date", "before_min_date", "after_max_date", "before_other_date", "after_other_date", "min_age", "max_age"}
+		critical = {}
+		for k, v in (errs or {}).items():
+			# Missing inline 'otro_' when selected
+			if isinstance(k, str) and k.startswith("otro_") and v == "required":
+				critical[k] = v; continue
+			# ICFES strict rules
+			if k in icfes_codes and v in ("out_of_range", "not_integer"):
+				critical[k] = v; continue
+			# Date bounds invalid
+			q = question_map.get(k)
+			if q is not None and getattr(q, "type", None) == "date" and isinstance(v, str) and v in date_errs:
+				critical[k] = v; continue
+			# Invalid options for choice/multi
+			if v == "invalid_option" or v == "not_array" or (isinstance(v, dict) and v.get("invalid_options")):
+				critical[k] = v; continue
+		if critical:
+			return jsonify({"error": "validation", "details": errs, "critical": critical, "mode": "save_strict"}), 400
 		_upsert_items(s, resp.id, question_map, normalized)
 		assign.status = "in_progress"
 		s.commit()
@@ -407,6 +474,51 @@ def _upsert_items(s: Session, response_id: int, question_map_by_code: dict, norm
 			item.numeric_value = item_kwargs["numeric_value"]
 		else:
 			s.add(ResponseItem(response_id=response_id, question_id=qu.id, **item_kwargs))
+
+
+@dynamic_questionnaire_bp.route("/dynamic/prefill", methods=["GET"])
+def prefill_values():
+	"""Return last known values for given codes across any questionnaires for a user.
+	Query params: user_code, codes=code1,code2
+	Response: { values: { code: value, ... } }
+	"""
+	if not _feature_enabled():
+		return jsonify({"error": "disabled"}), 404
+	user_code = (request.args.get("user_code") or "").strip() or None
+	codes_param = (request.args.get("codes") or "").strip()
+	codes = [c.strip() for c in codes_param.split(",") if c.strip()]
+	if not user_code or not codes:
+		return jsonify({"values": {}})
+	values = {c: None for c in codes}
+	# Strategy: find latest responses for this user, scan items for matching question codes
+	with Session(engine) as s:
+		# Gather recent responses for this user across assignments, newest first
+		assigns = s.query(QuestionnaireAssignment).filter_by(user_code=user_code).order_by(desc(QuestionnaireAssignment.last_activity_at)).all()
+		# Build map question_id->code for versions lazily
+		qid_to_code_cache = {}
+		for a in assigns:
+			resp = s.query(Response).filter_by(assignment_id=a.id).order_by(desc(Response.id)).first()
+			if not resp:
+				continue
+			# Build version code map on demand
+			if a.questionnaire_version_id not in qid_to_code_cache:
+				v = s.get(QuestionnaireVersion, a.questionnaire_version_id)
+				cmap = {}
+				if v:
+					for sec in v.sections:
+						for qu in sec.questions:
+							cmap[qu.id] = qu.code
+				qid_to_code_cache[a.questionnaire_version_id] = cmap
+			cmap = qid_to_code_cache.get(a.questionnaire_version_id, {})
+			items = s.query(ResponseItem).filter_by(response_id=resp.id).all()
+			for it in items:
+				c = cmap.get(it.question_id)
+				if c and (c in values) and values[c] is None:
+					values[c] = _parse_value(it)
+			# stop early if all found
+			if all(values[c] is not None for c in codes):
+				break
+	return jsonify({"values": values})
 
 
 @dynamic_questionnaire_bp.route("/dynamic/my-questionnaires", methods=["GET"])

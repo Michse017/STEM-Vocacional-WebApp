@@ -6,6 +6,7 @@ from flask import Blueprint, request, jsonify, current_app
 from backend.services.auth_admin_service import require_admin
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from database.controller import engine
 from database.dynamic_models import (
 	Questionnaire, QuestionnaireVersion, Section, Question, Option,
@@ -284,6 +285,26 @@ def clone_latest_published(code: str):
 			"version": {"id": new_v.id, "number": new_v.version_number, "status": new_v.status}
 		}), 201
 
+@admin_dynamic_bp.route("/admin/questionnaires/<code>/new-version", methods=["POST"])
+def create_new_blank_version(code: str):
+	"""Create a new blank draft version for a questionnaire.
+	Increments version_number to max+1, or creates number 1 if no versions exist.
+	"""
+	if not _enabled():
+		return _error("dynamic_disabled", 404)
+	with Session(engine) as s:
+		q = s.execute(select(Questionnaire).where(Questionnaire.code==code)).scalar_one_or_none()
+		if not q:
+			return _error("not_found", 404)
+		if q.versions:
+			new_number = max(v.version_number for v in q.versions) + 1
+		else:
+			new_number = 1
+		new_v = QuestionnaireVersion(questionnaire=q, version_number=new_number, status="draft")
+		s.add(new_v)
+		s.commit()
+		return jsonify({"message": "new_version_created", "version": {"id": new_v.id, "number": new_v.version_number, "status": new_v.status}}), 201
+
 @admin_dynamic_bp.route("/admin/versions/<int:version_id>", methods=["GET"])
 def get_version(version_id: int):
 	"""Fetch full structure for a given version (draft or published) for admin UI."""
@@ -304,9 +325,46 @@ def delete_version(version_id: int):
 		v = s.get(QuestionnaireVersion, version_id)
 		if not v:
 			return _error("version_not_found", 404)
-		if v.status == "draft":
+		# Force purge path (?force=1): purge assignments/responses/items, then delete version
+		force = str(request.args.get("force", "")).lower() in ("1", "true", "yes")
+		if force:
+			if v.status == "published":
+				return _error("cannot_force_delete_published", 409)
+			# delete data for this version
+			assignment_ids = [i for (i,) in s.query(QuestionnaireAssignment.id).filter_by(questionnaire_version_id=v.id).all()]
+			responses_deleted = 0
+			items_deleted = 0
+			assignments_deleted = 0
+			if assignment_ids:
+				response_ids = [i for (i,) in s.query(Response.id).filter(Response.assignment_id.in_(assignment_ids)).all()]
+				if response_ids:
+					items_deleted = s.query(ResponseItem).filter(ResponseItem.response_id.in_(response_ids)).delete(synchronize_session=False)
+					responses_deleted = s.query(Response).filter(Response.id.in_(response_ids)).delete(synchronize_session=False)
+				assignments_deleted = s.query(QuestionnaireAssignment).filter(QuestionnaireAssignment.id.in_(assignment_ids)).delete(synchronize_session=False)
 			s.delete(v)
 			s.commit()
+			return jsonify({"message": "version_force_deleted", "deleted": {"assignments": assignments_deleted, "responses": responses_deleted, "items": items_deleted}})
+		# Bloquear si existen respuestas (items) para cualquier pregunta de esta versión
+		try:
+			# Obtener ids de preguntas de la versión
+			q_ids = []
+			for sec in v.sections:
+				q_ids.extend([q.id for q in sec.questions])
+			if q_ids:
+				items_count = s.query(func.count(ResponseItem.id)).filter(ResponseItem.question_id.in_(q_ids)).scalar() or 0
+				if items_count > 0:
+					assign_count = s.query(func.count(QuestionnaireAssignment.id)).filter(QuestionnaireAssignment.questionnaire_version_id == v.id).scalar() or 0
+					return _error("version_has_responses", 409, responses=items_count, assignments=assign_count)
+		except Exception:
+			# Si el chequeo falla, continuamos y dejamos que el DBMS haga respetar integridad
+			pass
+		if v.status == "draft":
+			try:
+				s.delete(v)
+				s.commit()
+			except IntegrityError:
+				s.rollback()
+				return _error("version_has_responses", 409)
 			return jsonify({"message": "version_deleted"})
 		# Si es publicada: permitir borrar sólo si NO es la última publicada y no tiene asignaciones
 		if v.status == "published":
@@ -318,16 +376,24 @@ def delete_version(version_id: int):
 			has_assignments = s.query(QuestionnaireAssignment).filter_by(questionnaire_version_id=v.id).limit(1).count() > 0
 			if has_assignments:
 				return _error("version_has_assignments", 409)
-			s.delete(v)
-			s.commit()
+			try:
+				s.delete(v)
+				s.commit()
+			except IntegrityError:
+				s.rollback()
+				return _error("version_has_responses", 409)
 			return jsonify({"message": "version_deleted"})
 		# Si está archivada: permitir borrar solo si no tiene asignaciones
 		if v.status == "archived":
 			has_assignments = s.query(QuestionnaireAssignment).filter_by(questionnaire_version_id=v.id).limit(1).count() > 0
 			if has_assignments:
 				return _error("version_has_assignments", 409)
-			s.delete(v)
-			s.commit()
+			try:
+				s.delete(v)
+				s.commit()
+			except IntegrityError:
+				s.rollback()
+				return _error("version_has_responses", 409)
 			return jsonify({"message": "version_deleted"})
 		return _error("unsupported_version_status", 409)
 
@@ -377,13 +443,14 @@ def force_delete_version(version_id: int):
 @admin_dynamic_bp.route("/admin/versions/<int:version_id>", methods=["PATCH"])
 def patch_version(version_id: int):
 	"""Actualizar metadatos de la versión.
-	Body: { "status": "draft" } para despublicar, o { "status": "published" } para publicar (demote siblings).
+	Body: { "status": "draft" } para despublicar, { "status": "published" } para publicar (demote siblings),
+	o { "status": "archived" } para archivar (solo permitido desde draft).
 	"""
 	if not _enabled():
 		return _error("dynamic_disabled", 404)
 	payload = request.get_json(force=True, silent=True) or {}
 	target_status = (payload.get("status") or "").strip()
-	if target_status not in ("draft", "published"):
+	if target_status not in ("draft", "published", "archived"):
 		return _error("invalid_status")
 	with Session(engine) as s:
 		v = s.get(QuestionnaireVersion, version_id)
@@ -411,6 +478,13 @@ def patch_version(version_id: int):
 			v.valid_from = func.now()
 			s.commit()
 			return jsonify({"message": "published", "version": {"id": v.id, "status": v.status}})
+		if target_status == "archived":
+			if v.status != "draft":
+				return _error("archive_only_from_draft", 409)
+			v.status = "archived"
+			v.valid_to = func.now()
+			s.commit()
+			return jsonify({"message": "archived", "version": {"id": v.id, "status": v.status}})
 	return _error("unsupported_operation", 409)
 
 @admin_dynamic_bp.route("/admin/versions/<int:version_id>/clone", methods=["POST"])
@@ -478,18 +552,36 @@ def add_question(section_id: int):
 	text = (payload.get("text") or "").strip()
 	q_type = (payload.get("type") or "text").strip()
 	required = bool(payload.get("required", True))
-	if not code or not text:
-		return _error("code_and_text_required")
+	if not text:
+		return _error("text_required")
 	with Session(engine) as s:
 		sec = s.get(Section, section_id)
 		if not sec:
 			return _error("section_not_found", 404)
 		if sec.version.status != "draft":
 			return _error("version_not_draft", 409)
-		# uniqueness of code within version
+		# Determine code: if missing, auto-generate a unique slug from text within the version
 		existing_codes = {q.code for s2 in sec.version.sections for q in s2.questions}
-		if code in existing_codes:
-			return _error("code_exists", 409)
+		if not code:
+			import re as _re
+			def _slugify(s: str) -> str:
+				s = s.lower().strip()
+				s = _re.sub(r"[^a-z0-9\-\s]", "", s)
+				s = _re.sub(r"\s+", "-", s)
+				s = _re.sub(r"-+", "-", s)
+				return s[:64] or "q"
+			base = _slugify(text)
+			candidate = base
+			i = 2
+			while candidate in existing_codes:
+				candidate = f"{base}-{i}"
+				i += 1
+				if len(candidate) > 64:
+					candidate = candidate[:64]
+			code = candidate
+		else:
+			if code in existing_codes:
+				return _error("code_exists", 409)
 		existing_orders = [q.order for q in sec.questions]
 		order = payload.get("order")
 		if order is None:
@@ -611,8 +703,21 @@ def delete_section(section_id: int):
 			return _error("section_not_found", 404)
 		if not _ensure_draft(sec):
 			return _error("version_not_draft", 409)
-		s.delete(sec)
-		s.commit()
+		# Prevent delete if any question in this section has responses
+		try:
+			q_ids = [q.id for q in sec.questions]
+			if q_ids:
+				items = s.query(func.count(ResponseItem.id)).filter(ResponseItem.question_id.in_(q_ids)).scalar() or 0
+				if items > 0:
+					return _error("section_has_responses", 409, responses=items)
+		except Exception:
+			pass
+		try:
+			s.delete(sec)
+			s.commit()
+		except IntegrityError:
+			s.rollback()
+			return _error("section_has_responses", 409)
 		return jsonify({"message": "section_deleted"})
 
 @admin_dynamic_bp.route("/admin/questions/<int:question_id>", methods=["PATCH"])
@@ -652,8 +757,19 @@ def delete_question(question_id: int):
 			return _error("question_not_found", 404)
 		if not _ensure_draft(qu):
 			return _error("version_not_draft", 409)
-		s.delete(qu)
-		s.commit()
+		# Prevent delete if there are response items for this question
+		try:
+			items = s.query(func.count(ResponseItem.id)).filter(ResponseItem.question_id == qu.id).scalar() or 0
+			if items > 0:
+				return _error("question_has_responses", 409, responses=items)
+		except Exception:
+			pass
+		try:
+			s.delete(qu)
+			s.commit()
+		except IntegrityError:
+			s.rollback()
+			return _error("question_has_responses", 409)
 		return jsonify({"message": "question_deleted"})
 
 @admin_dynamic_bp.route("/admin/options/<int:option_id>", methods=["PATCH"])
@@ -752,8 +868,51 @@ def delete_questionnaire(code: str):
 		# forbid deletion if any published version exists
 		if any(v.status == "published" for v in q.versions):
 			return _error("has_published_version", 409)
-		s.delete(q)
-		s.commit()
+		# Force purge path (?force=1): purge all versions' data then delete questionnaire
+		force = str(request.args.get("force", "")).lower() in ("1", "true", "yes")
+		if force:
+			versions = list(q.versions)
+			total_assignments = 0
+			total_responses = 0
+			total_items = 0
+			for v in versions:
+				assignment_ids = [i for (i,) in s.query(QuestionnaireAssignment.id).filter_by(questionnaire_version_id=v.id).all()]
+				if assignment_ids:
+					response_ids = [i for (i,) in s.query(Response.id).filter(Response.assignment_id.in_(assignment_ids)).all()]
+					if response_ids:
+						total_items += s.query(ResponseItem).filter(ResponseItem.response_id.in_(response_ids)).delete(synchronize_session=False)
+						total_responses += s.query(Response).filter(Response.id.in_(response_ids)).delete(synchronize_session=False)
+					total_assignments += s.query(QuestionnaireAssignment).filter(QuestionnaireAssignment.id.in_(assignment_ids)).delete(synchronize_session=False)
+			# delete versions (cascade relationships will remove sections/questions/options)
+			for v in list(q.versions):
+				s.delete(v)
+			s.delete(q)
+			s.commit()
+			return jsonify({"message": "questionnaire_force_deleted", "deleted": {"versions": len(versions), "assignments": total_assignments, "responses": total_responses, "items": total_items}})
+		# Block if any responses exist for any version's questions
+		try:
+			version_ids = [v.id for v in q.versions]
+			items_count = 0
+			if version_ids:
+				items_count = (s.query(func.count(ResponseItem.id))
+								 .join(Question, ResponseItem.question_id == Question.id)
+								 .join(Section, Question.section_id == Section.id)
+								 .filter(Section.questionnaire_version_id.in_(version_ids))
+								 .scalar() or 0)
+			if items_count > 0:
+				assign_count = (s.query(func.count(QuestionnaireAssignment.id))
+								  .filter(QuestionnaireAssignment.questionnaire_version_id.in_(version_ids))
+								  .scalar() or 0)
+				return _error("questionnaire_has_responses", 409, responses=items_count, assignments=assign_count)
+		except Exception:
+			# If check fails, fall back to DB constraint handling
+			pass
+		try:
+			s.delete(q)
+			s.commit()
+		except IntegrityError:
+			s.rollback()
+			return _error("questionnaire_has_responses", 409)
 		return jsonify({"message": "questionnaire_deleted"})
 
 @admin_dynamic_bp.route("/admin/questionnaires/<code>", methods=["PATCH"])
@@ -772,4 +931,51 @@ def patch_questionnaire(code: str):
 		q.status = new_status
 		s.commit()
 		return jsonify({"message": "questionnaire_updated", "status": q.status})
+
+@admin_dynamic_bp.route("/admin/questionnaires/<code>/force-delete", methods=["DELETE"])
+def force_delete_questionnaire(code: str):
+	"""Eliminar DEFINITIVAMENTE un cuestionario COMPLETO con todas sus versiones y datos.
+	Requisitos:
+	  - Todas las versiones deben estar en estado 'archived'.
+	Pasos:
+	  - Por cada versión: eliminar ResponseItem -> Response -> Assignment
+	  - Eliminar versiones, secciones, preguntas y opciones
+	  - Eliminar el cuestionario
+	"""
+	if not _enabled():
+		return _error("dynamic_disabled", 404)
+	with Session(engine) as s:
+		q = s.execute(select(Questionnaire).where(Questionnaire.code == code)).scalar_one_or_none()
+		if not q:
+			return _error("not_found", 404)
+		versions = list(q.versions)
+		if not versions:
+			s.delete(q)
+			s.commit()
+			return jsonify({"message": "questionnaire_force_deleted", "deleted": {"versions": 0, "assignments": 0, "responses": 0, "items": 0}})
+		non_archived = [v.version_number for v in versions if v.status != "archived"]
+		if non_archived:
+			return _error("archive_versions_first", 409, non_archived=non_archived)
+		# Delete data per version
+		total_assignments = 0
+		total_responses = 0
+		total_items = 0
+		for v in versions:
+			assignment_ids = [i for (i,) in s.query(QuestionnaireAssignment.id).filter_by(questionnaire_version_id=v.id).all()]
+			if assignment_ids:
+				response_ids = [i for (i,) in s.query(Response.id).filter(Response.assignment_id.in_(assignment_ids)).all()]
+				if response_ids:
+					total_items += s.query(ResponseItem).filter(ResponseItem.response_id.in_(response_ids)).delete(synchronize_session=False)
+					total_responses += s.query(Response).filter(Response.id.in_(response_ids)).delete(synchronize_session=False)
+				total_assignments += s.query(QuestionnaireAssignment).filter(QuestionnaireAssignment.id.in_(assignment_ids)).delete(synchronize_session=False)
+		# Delete versions (will cascade to sections/questions/options)
+		for v in versions:
+			s.delete(v)
+		# Finally delete questionnaire
+		s.delete(q)
+		s.commit()
+		return jsonify({
+			"message": "questionnaire_force_deleted",
+			"deleted": {"versions": len(versions), "assignments": total_assignments, "responses": total_responses, "items": total_items}
+		})
 

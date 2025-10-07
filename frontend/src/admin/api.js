@@ -31,3 +31,7 @@ export async function api(path, opts = {}) {
   }
   throw new Error(data?.error || `HTTP ${res.status}`);
 }
+
+export async function deleteQuestionnaire(code) {
+  return api(`/admin/questionnaires/${encodeURIComponent(code)}`, { method: 'DELETE' });
+}

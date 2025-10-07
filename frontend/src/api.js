@@ -86,6 +86,12 @@ export const getDynamicOverview = async (userCode) => {
   return handleResponse(res);
 };
 
+export const getPrefillValues = async (userCode, codes) => {
+  const qs = new URLSearchParams({ user_code: userCode || '', codes: (codes||[]).join(',') });
+  const res = await fetch(`${API_BASE_URL}/dynamic/prefill?${qs.toString()}`, { method: 'GET' });
+  return handleResponse(res);
+};
+
 export const saveDynamicResponse = async (code, payload) => {
   const res = await fetch(`${API_BASE_URL}/dynamic/questionnaires/${encodeURIComponent(code)}/save`, {
     method: "POST",
@@ -116,4 +122,35 @@ export const saveDynamicResponseKeepAlive = async (code, payload) => {
   } catch (_) {
     return false;
   }
+};
+
+// --- Student Auth (code-first, admin pre-registered) ---
+
+export const checkUsuario = async (codigoEstudiante) => {
+  const res = await fetch(`${API_BASE_URL}/usuarios/check`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ codigo_estudiante: codigoEstudiante })
+  });
+  if (res.status === 404) return { error: 'not_found' };
+  return handleResponse(res);
+};
+
+export const setupCredenciales = async ({ codigoEstudiante, username, password, confirm }) => {
+  const res = await fetch(`${API_BASE_URL}/usuarios/setup-credentials`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ codigo_estudiante: codigoEstudiante, username, password, confirm })
+  });
+  return handleResponse(res);
+};
+
+export const loginConPassword = async ({ codigoEstudiante, password }) => {
+  const res = await fetch(`${API_BASE_URL}/usuarios/login-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ codigo_estudiante: codigoEstudiante, password })
+  });
+  if (res.status === 404) throw new Error('El código ingresado no está registrado.');
+  return handleResponse(res);
 };

@@ -4,14 +4,23 @@ import sys
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-DB_SERVER = os.getenv("DB_SERVER", "stemdb.database.windows.net")
-DB_DATABASE = os.getenv("DB_DATABASE", "StemDB")
-DB_USER = os.getenv("DB_USER", "michsega17@gmail.com@stemdb")
+# Cargar variables desde entorno (sin credenciales por defecto)
+DB_SERVER = os.getenv("DB_SERVER")
+DB_DATABASE = os.getenv("DB_DATABASE")
+DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
+# Driver/puerto pueden tener defaults seguros
 DB_DRIVER = os.getenv("DB_DRIVER", "{ODBC Driver 17 for SQL Server}")
 DB_PORT = os.getenv("DB_PORT", "1433")
 
 _cached_password = None
+
+def _require(value, name: str):
+    if not value:
+        print(f"❌ Error: la variable de entorno {name} no está configurada.", file=sys.stderr)
+        print(f"Configure {name} en el entorno o en .env y vuelva a intentar.", file=sys.stderr)
+        sys.exit(1)
+    return value
 
 def get_password(interactive=False):
     """Obtiene la contraseña de forma segura."""
@@ -32,8 +41,12 @@ def get_password(interactive=False):
 
 def get_database_url(interactive=False):
     """Construye la URL de conexión para SQLAlchemy (pyodbc)."""
+    # Validar variables requeridas
+    server = _require(DB_SERVER, "DB_SERVER")
+    database = _require(DB_DATABASE, "DB_DATABASE")
+    user = _require(DB_USER, "DB_USER")
     password = get_password(interactive)
-    encoded_user = DB_USER.replace('@', '%40')
+    encoded_user = user.replace('@', '%40')
     # Aseguramos que la contraseña sea un string antes de reemplazar
     encoded_password = str(password).replace('@', '%40').replace('!', '%21')
     
@@ -42,7 +55,7 @@ def get_database_url(interactive=False):
 
     return (
         f"mssql+pyodbc://{encoded_user}:{encoded_password}@"
-        f"{DB_SERVER}:{DB_PORT}/{DB_DATABASE}?"
+        f"{server}:{DB_PORT}/{database}?"
         f"driver={driver_for_url}&"
         f"encrypt=yes&"
         f"TrustServerCertificate=no&"
@@ -57,6 +70,10 @@ def create_sqlalchemy_engine():
     Razón: en Windows/Python recientes (p. ej. 3.13), pymssql puede no estar disponible.
     En ese caso, usamos ODBC (driver 17/18) con URL pyodbc.
     """
+    # Validar variables requeridas antes de construir URLs
+    _require(DB_SERVER, "DB_SERVER")
+    _require(DB_DATABASE, "DB_DATABASE")
+    _require(DB_USER, "DB_USER")
     password = get_password()
     # Intento 1: pymssql
     try:
@@ -108,6 +125,10 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_connection_string_for_test():
     """Construye un connection string ODBC para pruebas interactivas."""
+    # Validar variables requeridas para la prueba interactiva
+    _require(DB_SERVER, "DB_SERVER")
+    _require(DB_DATABASE, "DB_DATABASE")
+    _require(DB_USER, "DB_USER")
     password = get_password(interactive=True)
     return (
         f"Driver={DB_DRIVER};"
@@ -146,32 +167,3 @@ if __name__ == "__main__":
     success, message = test_connection()
     print(f"\nResultado: {'✅ OK' if success else '❌ FALLO'}")
     print(f"Detalle: {message}")
-
-    if success:
-        try:
-            db = SessionLocal()
-            print("\nIntentando insertar usuario de prueba 'test-002'...")
-            merge_sql = text(
-                """
-                MERGE INTO usuarios AS target
-                USING (SELECT :codigo AS codigo_estudiante) AS source
-                ON (target.codigo_estudiante = source.codigo_estudiante)
-                WHEN NOT MATCHED THEN
-                    INSERT (codigo_estudiante, finalizado)
-                    VALUES (source.codigo_estudiante, 0);
-                """
-            )
-            db.execute(merge_sql, {"codigo": "test-002"})
-            db.commit()
-            print("✅ Usuario de prueba 'test-002' insertado (o ya existía).")
-        except Exception as e:
-            print(f"❌ Error al insertar usuario de prueba: {e}", file=sys.stderr)
-            try:
-                db.rollback()
-            except Exception:
-                pass
-        finally:
-            try:
-                db.close()
-            except Exception:
-                pass

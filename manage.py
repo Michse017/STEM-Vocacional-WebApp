@@ -1,17 +1,3 @@
-"""Management utility to simplify common tasks.
-
-Usage (PowerShell examples):
-  python manage.py run-public          # starts public app (port 5000)
-  python manage.py run-admin           # starts admin app (port 5001)
-  python manage.py seed-dynamic        # runs legacy -> dynamic seed
-  python manage.py run-admin --no-dynamic  # run admin without dynamic endpoints
-
-Options:
-  --host 0.0.0.0  (default 127.0.0.1)
-  --port <port>
-
-This is lightweight; for more complex setups consider Flask CLI integration.
-"""
 from __future__ import annotations
 
 import argparse
@@ -21,6 +7,13 @@ import subprocess
 from pathlib import Path
 from importlib import import_module
 from shutil import which
+
+# Cargar .env para que los comandos hereden variables
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
 
 
 def parse_args():
@@ -60,6 +53,9 @@ def parse_args():
 
     # DB maintenance: drop legacy usuarios.finalizado
     sub.add_parser("drop-legacy-finalizado", help="Drop legacy 'finalizado' column from usuarios table (migrated to dynamic assignments)")
+
+    # DB maintenance: ensure auth columns on usuarios
+    sub.add_parser("ensure-user-schema", help="Ensure usuarios has username/password_hash/timestamps and remove legacy fields")
 
     return parser.parse_args()
 
@@ -159,24 +155,55 @@ def _resolve_frontend_command(cmd: str) -> list[str]:
 
 
 def run_public_full(host: str, port: int | None, dynamic: bool, debug: bool, frontend_port: int, frontend_path: str, silent: bool, node_cmd: str):
-    """Start frontend and the public backend together for end-users.
+    """Start backend first, wait until healthy, then start the React dev server.
+    - Ensures API is up before frontend opens the browser.
     - Admin UI disabled in frontend.
     - Dynamic questionnaires enabled by default unless --no-dynamic.
     """
     set_flag(dynamic)
-    env = os.environ.copy()
-    env.setdefault("REACT_APP_ENABLE_ADMIN", "0")
-    # Frontend default API base points to http://127.0.0.1:5000/api when local, so no need to override.
-    env.setdefault("PORT", str(frontend_port))
+    # 1) Start backend in a child process
+    backend_host = host
+    backend_port = port or 5000
+    print("[run-public-full] Starting public backend ...")
+    backend_proc = subprocess.Popen([
+        sys.executable,
+        "-c",
+        (
+            "import os; os.environ.setdefault('ENABLE_DYNAMIC_QUESTIONNAIRES','1');"
+            "from app import create_app; app=create_app();"
+            f"app.run(host='{backend_host}', port={backend_port}, debug=False)"
+        ),
+    ])
 
+    # 2) Wait for health endpoint to respond
+    import time, urllib.request
+    health_url = f"http://127.0.0.1:{backend_port}/api/health"
+    for i in range(60):
+        try:
+            with urllib.request.urlopen(health_url, timeout=1) as r:
+                if r.status == 200:
+                    print(f"[run-public-full] Backend healthy at {health_url}")
+                    break
+        except Exception:
+            time.sleep(0.5)
+    else:
+        print("[run-public-full] Warning: backend did not report healthy, continuing anyway...", file=sys.stderr)
+
+    # 3) Start frontend
+    env = os.environ.copy()
+    # App unificada: habilitar Admin UI por defecto
+    env.setdefault("REACT_APP_ENABLE_ADMIN", "1")
+    env.setdefault("PORT", str(frontend_port))
     front_dir = Path(frontend_path).resolve()
     if not front_dir.exists():
         print(f"[run-public-full] Frontend path not found: {front_dir}", file=sys.stderr)
+        backend_proc.terminate()
         sys.exit(2)
     try:
         tool_parts = _resolve_frontend_command(node_cmd)
     except FileNotFoundError as e:
         print(f"[run-public-full] {e}", file=sys.stderr)
+        backend_proc.terminate()
         sys.exit(3)
     if len(tool_parts) == 1:
         tool_parts += ["run", "start"] if tool_parts[0] in {"yarn", "pnpm"} else ["start"]
@@ -185,8 +212,12 @@ def run_public_full(host: str, port: int | None, dynamic: bool, debug: bool, fro
         subprocess.Popen(tool_parts, cwd=str(front_dir), env=env)
     else:
         subprocess.Popen(tool_parts, cwd=str(front_dir), env=env, stdout=sys.stdout, stderr=sys.stderr)
-    print("[run-public-full] Starting public backend ...")
-    run_public(host, port, dynamic)
+
+    # 4) Attach to backend loop (blocks)
+    try:
+        backend_proc.wait()
+    except KeyboardInterrupt:
+        pass
 
 
 def add_admin(codigo: str, password: str | None):
@@ -281,6 +312,12 @@ def main():
         return list_admins()
     elif args.command == "drop-legacy-finalizado":
         return drop_legacy_finalizado()
+    elif args.command == "ensure-user-schema":
+        # Run the guard explicitly
+        from database.controller import engine
+        from database.models import ensure_user_schema
+        ensure_user_schema(engine)
+        print("ensure_user_schema executed.")
     else:
         print("Unknown command")
         return 1

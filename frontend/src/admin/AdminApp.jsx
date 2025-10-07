@@ -18,6 +18,7 @@ export default function AdminApp() {
   const logout = async () => {
     try { await fetch(`${(process.env.REACT_APP_ADMIN_API_BASE || 'http://localhost:5000/api')}/auth/admin/logout`, { method:'POST', credentials:'include' }); } catch (_) {}
     try { localStorage.removeItem('admin_token'); } catch (_) {}
+    try { localStorage.removeItem('active_session'); } catch (_) {}
     window.location.href = '/login';
   };
 

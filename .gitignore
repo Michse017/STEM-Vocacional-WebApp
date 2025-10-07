@@ -7,6 +7,7 @@ venv/
 
 __pycache__/
 *.py[cod]
+.pytest_cache/
 
 *.csv
 *.pkl
@@ -26,6 +27,6 @@ backend/node_modules/
 
 tempCodeRunnerFile.py
 .coverage
-
-RUN.md
-.env.example
+htmlcov/
+coverage.xml
+.DS_Store

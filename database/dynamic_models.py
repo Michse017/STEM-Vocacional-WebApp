@@ -6,7 +6,7 @@ They are added to the same SQLAlchemy Base so tables get created idempotently.
 Use the environment variable ENABLE_DYNAMIC_QUESTIONNAIRES=1 to activate related blueprints.
 """
 from sqlalchemy import (
-    Column, Integer, String, DateTime, Boolean, ForeignKey, Text, UniqueConstraint, JSON, inspect, text
+    Column, Integer, String, DateTime, Boolean, ForeignKey, Text, UniqueConstraint, JSON, inspect, text, Index
 )
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -28,6 +28,11 @@ class Questionnaire(Base):
 
     versions = relationship("QuestionnaireVersion", back_populates="questionnaire", cascade="all, delete-orphan")
 
+    __table_args__ = (
+        # Composite index to quickly find the active primary questionnaire
+        Index("ix_dq_questionnaire_primary_active", is_primary, status),
+    )
+
 class QuestionnaireVersion(Base):
     __tablename__ = "dq_questionnaire_version"
     id = Column(Integer, primary_key=True)
@@ -45,6 +50,8 @@ class QuestionnaireVersion(Base):
 
     __table_args__ = (
         UniqueConstraint("questionnaire_id", "version_number", name="uq_dq_questionnaire_version_number"),
+        # Help locate latest published (filter by questionnaire_id + status, then sort by version_number)
+        Index("ix_dq_qv_questionnaire_status_version", questionnaire_id, status, version_number),
     )
 
 class Section(Base):
@@ -109,6 +116,12 @@ class QuestionnaireAssignment(Base):
     last_activity_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     progress_percent = Column(Integer, nullable=False, default=0)
 
+    __table_args__ = (
+        # Speed up lookups by (user_code, questionnaire_version_id)
+        Index("ix_dq_assignment_user_version", user_code, questionnaire_version_id),
+        Index("ix_dq_assignment_last_activity", last_activity_at),
+    )
+
 class Response(Base):
     __tablename__ = "dq_response"
     id = Column(Integer, primary_key=True)
@@ -117,6 +130,10 @@ class Response(Base):
     submitted_at = Column(DateTime)
     finalized_at = Column(DateTime)
     summary_cache = Column(JSON)
+
+    __table_args__ = (
+        Index("ix_dq_response_assignment", assignment_id),
+    )
 
 class ResponseItem(Base):
     __tablename__ = "dq_response_item"
@@ -132,6 +149,7 @@ class ResponseItem(Base):
 
     __table_args__ = (
         UniqueConstraint("response_id", "question_id", name="uq_dq_response_question"),
+        Index("ix_dq_response_item_response", response_id),
     )
 
 # --- Change Log ---
@@ -160,10 +178,60 @@ def ensure_dynamic_schema(db_engine):
         inspector = inspect(db_engine)
         cols = inspector.get_columns("dq_questionnaire")
         col_names = {c.get("name") or c.get("column_name") for c in cols}
-        if "is_primary" not in col_names:
-            with db_engine.begin() as conn:
+        with db_engine.begin() as conn:
+            if "is_primary" not in col_names:
                 # SQL Server BIT type for boolean; default 0
                 conn.execute(text("ALTER TABLE dq_questionnaire ADD is_primary BIT NOT NULL CONSTRAINT DF_dq_questionnaire_is_primary DEFAULT 0"))
+
+            # Ensure performance indexes (SQL Server specific IF NOT EXISTS checks)
+            conn.execute(text(
+                """
+                IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_dq_questionnaire_primary_active' AND object_id = OBJECT_ID('dbo.dq_questionnaire'))
+                BEGIN
+                    CREATE INDEX ix_dq_questionnaire_primary_active ON dbo.dq_questionnaire (is_primary, status);
+                END
+                """
+            ))
+            conn.execute(text(
+                """
+                IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_dq_qv_questionnaire_status_version' AND object_id = OBJECT_ID('dbo.dq_questionnaire_version'))
+                BEGIN
+                    CREATE INDEX ix_dq_qv_questionnaire_status_version ON dbo.dq_questionnaire_version (questionnaire_id, status, version_number);
+                END
+                """
+            ))
+            conn.execute(text(
+                """
+                IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_dq_assignment_user_version' AND object_id = OBJECT_ID('dbo.dq_assignment'))
+                BEGIN
+                    CREATE INDEX ix_dq_assignment_user_version ON dbo.dq_assignment (user_code, questionnaire_version_id);
+                END
+                """
+            ))
+            conn.execute(text(
+                """
+                IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_dq_assignment_last_activity' AND object_id = OBJECT_ID('dbo.dq_assignment'))
+                BEGIN
+                    CREATE INDEX ix_dq_assignment_last_activity ON dbo.dq_assignment (last_activity_at);
+                END
+                """
+            ))
+            conn.execute(text(
+                """
+                IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_dq_response_assignment' AND object_id = OBJECT_ID('dbo.dq_response'))
+                BEGIN
+                    CREATE INDEX ix_dq_response_assignment ON dbo.dq_response (assignment_id);
+                END
+                """
+            ))
+            conn.execute(text(
+                """
+                IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_dq_response_item_response' AND object_id = OBJECT_ID('dbo.dq_response_item'))
+                BEGIN
+                    CREATE INDEX ix_dq_response_item_response ON dbo.dq_response_item (response_id);
+                END
+                """
+            ))
     except Exception:
         # Don't crash app if we can't alter schema; feature will behave as False
         pass

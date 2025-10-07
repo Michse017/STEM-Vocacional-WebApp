@@ -13,12 +13,23 @@ export default function Dashboard() {
   } else {
     try { sessionStorage.setItem('usuario', JSON.stringify(usuario)); } catch (_) {}
   }
+  // Ensure active_session is set when landing here with a student
+  useEffect(() => {
+    if (usuario?.codigo_estudiante) {
+      try {
+        const s = JSON.parse(localStorage.getItem('active_session') || 'null');
+        if (!s || s.type !== 'student') {
+          localStorage.setItem('active_session', JSON.stringify({ type: 'student', code: usuario.codigo_estudiante, at: Date.now() }))
+        }
+      } catch (_) {}
+    }
+  }, [usuario?.codigo_estudiante])
 
   const [primary, setPrimary] = useState({ loading: true, data: null, user: null, error: "" })
   const [dynWithUser, setDynWithUser] = useState({ items: [], loading: true, error: "" })
   useEffect(() => {
     let mounted = true
-    ;(async () => {
+    const load = async () => {
       try {
         const ov = await getDynamicOverview(usuario?.codigo_estudiante || '')
         if (!mounted) return
@@ -30,12 +41,14 @@ export default function Dashboard() {
           setDynWithUser({ items: [], loading: false, error: e.message || '' })
         }
       }
-    })()
+    }
+    load()
     return () => { mounted = false }
-  }, [usuario])
+  }, [usuario?.codigo_estudiante])
 
   const handleLogout = () => {
     try { sessionStorage.removeItem('usuario'); } catch (_) {}
+    try { localStorage.removeItem('active_session'); } catch (_) {}
     navigate("/login", { replace: true })
   }
 

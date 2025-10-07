@@ -10,6 +10,7 @@ except Exception:
     pass
 from database.controller import engine
 from database.models import Base
+from database.models import ensure_user_schema
 from database.dynamic_models import ensure_dynamic_schema
 from .routes.usuario_routes import usuario_bp
 from .routes.dynamic_questionnaire_routes import dynamic_questionnaire_bp
@@ -93,8 +94,21 @@ def create_app():
             # Ensure dynamic schema incremental changes (e.g., is_primary flag)
             try:
                 ensure_dynamic_schema(engine)
-            except Exception:
-                pass
+            except Exception as e:
+                try:
+                    import traceback; traceback.print_exc()
+                except Exception:
+                    pass
+                print(f"[startup] ensure_dynamic_schema skipped with error: {e}")
+            # Ensure user auth columns exist / legacy cleanup
+            try:
+                ensure_user_schema(engine)
+            except Exception as e:
+                try:
+                    import traceback; traceback.print_exc()
+                except Exception:
+                    pass
+                print(f"[startup] ensure_user_schema skipped with error: {e}")
             print("Tablas de la base de datos verificadas/creadas.")
         except Exception as db_error:
             print(f" Error al conectar con la base de datos: {db_error}")

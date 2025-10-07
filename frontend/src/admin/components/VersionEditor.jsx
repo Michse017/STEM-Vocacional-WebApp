@@ -6,6 +6,7 @@ export function VersionEditor({ versionId, onClose, onRefreshList }) {
   const [version, setVersion] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
   const [addingSec, setAddingSec] = useState(false);
   const [newSec, setNewSec] = useState({ title: '', description: '' });
   // reserved for future inline create pattern (removed unused state to satisfy lint)
@@ -25,29 +26,34 @@ export function VersionEditor({ versionId, onClose, onRefreshList }) {
   const isLatestPublished = !!version?.is_latest_published;
   const deleteVersion = async () => {
     if (!window.confirm('¿Eliminar esta versión (borrador)?')) return;
-    try { await api(`/admin/versions/${versionId}`, { method: 'DELETE' }); onClose(); onRefreshList(); }
+    try { setBusy(true); await api(`/admin/versions/${versionId}`, { method: 'DELETE' }); onClose(); onRefreshList(); }
     catch (e) { setError(e.message); }
+    finally { setBusy(false); }
   };
 
   const unpublish = async () => {
     if (!window.confirm('¿Despublicar esta versión? Pasará a borrador y dejará de estar disponible públicamente.')) return;
     try {
+      setBusy(true);
       await api(`/admin/versions/${versionId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'draft' }) });
       await load();
       onRefreshList();
     } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
   };
 
   const publish = async () => {
     if (!window.confirm('Publicar esta versión?')) return;
-    try { await api(`/admin/versions/${versionId}/publish`, { method: 'POST' }); await load(); onRefreshList(); }
+    try { setBusy(true); await api(`/admin/versions/${versionId}/publish`, { method: 'POST' }); await load(); onRefreshList(); }
     catch (e) { alert(e.message); }
+    finally { setBusy(false); }
   };
 
   const toggleQuestionnaireStatus = async () => {
     if (!version?.questionnaire?.code) return;
     const target = version.questionnaire.status === 'active' ? 'inactive' : 'active';
     try {
+      setBusy(true);
       await api(`/admin/questionnaires/${encodeURIComponent(version.questionnaire.code)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -56,56 +62,46 @@ export function VersionEditor({ versionId, onClose, onRefreshList }) {
       await load();
       onRefreshList();
     } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
   };
 
-  const patchSection = async (id, patch) => { try { await api(`/admin/sections/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }); await load(); } catch (e) { alert(e.message); } };
-  const deleteSection = async (id) => { if (!window.confirm('Eliminar sección?')) return; try { await api(`/admin/sections/${id}`, { method: 'DELETE' }); await load(); } catch (e) { alert(e.message); } };
-  const addQuestion = async (sectionId, payload) => { try { await api(`/admin/sections/${sectionId}/questions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); await load(); } catch (e) { alert(e.message); } };
+  const patchSection = async (id, patch) => { try { setBusy(true); await api(`/admin/sections/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }); await load(); } catch (e) { alert(e.message); } finally { setBusy(false); } };
+  const deleteSection = async (id) => { if (!window.confirm('Eliminar sección?')) return; try { setBusy(true); await api(`/admin/sections/${id}`, { method: 'DELETE' }); await load(); } catch (e) { alert(e.message); } finally { setBusy(false); } };
+  const addQuestion = async (sectionId, payload) => { try { setBusy(true); await api(`/admin/sections/${sectionId}/questions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); await load(); } catch (e) { alert(e.message); } finally { setBusy(false); } };
   const addQuestionWithOptions = async (sectionId, baseQuestion, options) => {
     try {
-      const q = await api(`/admin/sections/${sectionId}/questions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(baseQuestion) });
+  setBusy(true);
+  const q = await api(`/admin/sections/${sectionId}/questions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(baseQuestion) });
       const qid = q?.question?.id;
       if (qid && Array.isArray(options) && options.length) {
         for (const op of options) {
           await api(`/admin/questions/${qid}/options`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(op) });
         }
       }
-      // If there is an 'Otro' option flagged as is_other, create a companion text question with visible_if
-      const hasOther = Array.isArray(options) && options.some(o => o.is_other);
-      if (qid && hasOther) {
-        const code = baseQuestion.code;
-        await api(`/admin/sections/${sectionId}/questions`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            code: `otro_${code}`,
-            text: `Especifique (otro)`,
-            type: 'text',
-            required: true,
-            visible_if: { code, equals: 'Otro' },
-            validation_rules: { minLength: 1, maxLength: 200 }
-          })
-        });
-      }
       await load();
     } catch (e) { alert(e.message || 'No se pudo crear la pregunta con opciones'); }
+    finally { setBusy(false); }
   };
-  const patchQuestion = async (id, patch) => { try { await api(`/admin/questions/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }); await load(); } catch (e) { alert(e.message); } };
-  const deleteQuestion = async (id) => { if (!window.confirm('Eliminar pregunta?')) return; try { await api(`/admin/questions/${id}`, { method: 'DELETE' }); await load(); } catch (e) { alert(e.message); } };
-  const addOption = async (questionId, payload) => { try { await api(`/admin/questions/${questionId}/options`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); await load(); } catch (e) { alert(e.message); } };
-  const patchOption = async (id, patch) => { try { await api(`/admin/options/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }); await load(); } catch (e) { alert(e.message); } };
-  const deleteOption = async (id) => { if (!window.confirm('Eliminar opción?')) return; try { await api(`/admin/options/${id}`, { method: 'DELETE' }); await load(); } catch (e) { alert(e.message); } };
+  const patchQuestion = async (id, patch) => { try { setBusy(true); await api(`/admin/questions/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }); await load(); } catch (e) { alert(e.message); } finally { setBusy(false); } };
+  const deleteQuestion = async (id) => { if (!window.confirm('Eliminar pregunta?')) return; try { setBusy(true); await api(`/admin/questions/${id}`, { method: 'DELETE' }); await load(); } catch (e) { alert(e.message); } finally { setBusy(false); } };
+  const addOption = async (questionId, payload) => { try { setBusy(true); await api(`/admin/questions/${questionId}/options`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); await load(); } catch (e) { alert(e.message); } finally { setBusy(false); } };
+  const patchOption = async (id, patch) => { try { setBusy(true); await api(`/admin/options/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }); await load(); } catch (e) { alert(e.message); } finally { setBusy(false); } };
+  const deleteOption = async (id) => { if (!window.confirm('Eliminar opción?')) return; try { setBusy(true); await api(`/admin/options/${id}`, { method: 'DELETE' }); await load(); } catch (e) { alert(e.message); } finally { setBusy(false); } };
   const insertIcfesPackage = async () => {
     if (!window.confirm('Insertar paquete de preguntas ICFES (puntajes 0-100 y global)?')) return;
     try {
+      setBusy(true);
       await api(`/admin/versions/${versionId}/insert-icfes-package`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ include_global: true }) });
       await load();
     } catch (e) { alert(e.message || 'No se pudo insertar el paquete ICFES'); }
+    finally { setBusy(false); }
   };
 
   const addSection = async (e) => {
     e?.preventDefault?.();
     if (!newSec.title.trim()) { alert('El título de la sección es obligatorio.'); return; }
     try {
+      setBusy(true);
       await api(`/admin/versions/${versionId}/sections`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -116,7 +112,7 @@ export function VersionEditor({ versionId, onClose, onRefreshList }) {
       await load();
     } catch (e) {
       alert(e.message || 'No se pudo crear la sección');
-    }
+    } finally { setBusy(false); }
   };
 
   // --- Reorder helpers ---
@@ -158,21 +154,33 @@ export function VersionEditor({ versionId, onClose, onRefreshList }) {
     } catch (e) { alert(e.message || 'No se pudo reordenar la pregunta'); }
   };
 
+  // Reorder questions by new ordered id list (drag & drop support)
+  const reorderQuestionsBulk = async (sectionId, orderedIds) => {
+    try {
+      // assign sequential order starting at 1
+      const patches = orderedIds.map((qid, idx) =>
+        api(`/admin/questions/${qid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: idx + 1 }) })
+      );
+      await Promise.all(patches);
+      await load();
+    } catch (e) { alert(e.message || 'No se pudo reordenar'); }
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ margin: 0 }}>Versión v{version?.number} ({version?.status})</h3>
         <div style={{ display: 'flex', gap: 6, flexWrap:'wrap' }}>
-          <button className='btn btn-secondary btn-sm' onClick={toggleQuestionnaireStatus}>
+          <button className='btn btn-secondary btn-sm' onClick={toggleQuestionnaireStatus} disabled={busy}>
             {version?.questionnaire?.status === 'active' ? 'Desactivar cuestionario' : 'Activar cuestionario'}
           </button>
-          {isDraft && <button className='btn btn-primary btn-sm' onClick={publish}>Publicar</button>}
-          {isDraft && <button className='btn btn-danger btn-sm' onClick={deleteVersion}>Eliminar versión (borrador)</button>}
-          {isPublished && <button className='btn btn-warning btn-sm' onClick={unpublish}>Despublicar</button>}
-          <button className='btn btn-secondary btn-sm' onClick={onClose}>Cerrar</button>
+          {isDraft && <button className='btn btn-primary btn-sm' onClick={publish} disabled={busy}>Publicar</button>}
+          {isDraft && <button className='btn btn-danger btn-sm' onClick={deleteVersion} disabled={busy}>Eliminar versión (borrador)</button>}
+          {isPublished && <button className='btn btn-warning btn-sm' onClick={unpublish} disabled={busy}>Despublicar</button>}
+          <button className='btn btn-secondary btn-sm' onClick={onClose} disabled={busy}>Cerrar</button>
         </div>
       </div>
-      {loading && <p>Cargando...</p>}
+      {(loading || busy) && <p>Cargando...</p>}
       {error && <p style={{ color: 'crimson' }}>Error: {error}</p>}
       {version && (
         <div style={{ display: 'grid', gap: 16 }}>
@@ -189,7 +197,7 @@ export function VersionEditor({ versionId, onClose, onRefreshList }) {
             {isDraft && (
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                 {!addingSec && (
-                  <button className='btn btn-secondary btn-sm' onClick={() => setAddingSec(true)}>Agregar sección</button>
+                  <button className='btn btn-secondary btn-sm' onClick={() => setAddingSec(true)} disabled={busy}>Agregar sección</button>
                 )}
               </div>
             )}
@@ -199,8 +207,8 @@ export function VersionEditor({ versionId, onClose, onRefreshList }) {
                 <input placeholder='Título' value={newSec.title} onChange={e => setNewSec(s => ({ ...s, title: e.target.value }))} />
                 <textarea rows={2} placeholder='Descripción (opcional)' value={newSec.description} onChange={e => setNewSec(s => ({ ...s, description: e.target.value }))} />
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <button className='btn btn-primary btn-sm' type='submit'>Crear</button>
-                  <button className='btn btn-secondary btn-sm' type='button' onClick={() => { setAddingSec(false); setNewSec({ title: '', description: '' }); }}>Cancelar</button>
+                  <button className='btn btn-primary btn-sm' type='submit' disabled={busy}>Crear</button>
+                  <button className='btn btn-secondary btn-sm' type='button' onClick={() => { setAddingSec(false); setNewSec({ title: '', description: '' }); }} disabled={busy}>Cancelar</button>
                 </div>
               </form>
             )}
@@ -209,6 +217,8 @@ export function VersionEditor({ versionId, onClose, onRefreshList }) {
                 key={sec.id}
                 section={sec}
                 isDraft={isDraft}
+                busy={busy}
+                allCodes={version.sections.flatMap(s => (s.questions||[]).map(q => q.code))}
                 canMoveUp={idx > 0}
                 canMoveDown={idx < arr.length - 1}
                 onMoveUp={() => reorderSection(sec.id, 'up')}
@@ -224,6 +234,7 @@ export function VersionEditor({ versionId, onClose, onRefreshList }) {
                 onDeleteOption={deleteOption}
                 onInsertIcfesPackage={insertIcfesPackage}
                 onReorderQuestions={(questionId, dir) => reorderQuestions(sec.id, questionId, dir)}
+                onReorderAllQuestions={(orderedIds) => reorderQuestionsBulk(sec.id, orderedIds)}
               />
             ))}
             {version.sections.length === 0 && (
