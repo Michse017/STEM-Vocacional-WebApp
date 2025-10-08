@@ -132,6 +132,14 @@ def validate_answers(version, answers: Dict[str, Any]) -> Tuple[bool, Dict[str, 
                         normalized[code] = sval
                 else:
                     normalized[code] = sval
+        elif qtype == "email":
+            sval = str(raw) if raw is not None else ""
+            # Simple but robust email regex per HTML spec approximation
+            email_regex = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
+            if not re.fullmatch(email_regex, sval or ""):
+                errors[code] = "invalid_email"
+            else:
+                normalized[code] = sval
         elif qtype == "number":
             val, err = coerce_int(raw)
             if err:
@@ -175,12 +183,40 @@ def validate_answers(version, answers: Dict[str, Any]) -> Tuple[bool, Dict[str, 
                 # optional date bounds YYYY-MM-DD in rules
                 min_d = rules.get("min_date") if isinstance(rules, dict) else None
                 max_d = rules.get("max_date") if isinstance(rules, dict) else None
+                # presets: not_after_today, min_year, max_year
+                try:
+                    if isinstance(rules, dict) and rules.get("not_after_today"):
+                        today_s = date.today().strftime("%Y-%m-%d")
+                        max_d = min(max_d, today_s) if max_d else today_s
+                    if isinstance(rules, dict) and ("min_year" in rules):
+                        y = int(rules.get("min_year"))
+                        min_d = max(min_d, f"{y:04d}-01-01") if min_d else f"{y:04d}-01-01"
+                    if isinstance(rules, dict) and ("max_year" in rules):
+                        y = int(rules.get("max_year"))
+                        max_d = min(max_d, f"{y:04d}-12-31") if max_d else f"{y:04d}-12-31"
+                except Exception:
+                    pass
                 ok_bounds = True
                 try:
                     if min_d and val < str(min_d):
                         errors[code] = "before_min_date"; ok_bounds = False
                     if ok_bounds and max_d and val > str(max_d):
                         errors[code] = "after_max_date"; ok_bounds = False
+                    # relative rules against another date answer in same payload
+                    if ok_bounds and isinstance(rules, dict) and rules.get("not_before_code"):
+                        other_code = str(rules.get("not_before_code"))
+                        other_val = answers.get(other_code)
+                        if other_val:
+                            ov, oerr = coerce_date(str(other_val))
+                            if not oerr and ov and val < ov:
+                                errors[code] = "before_other_date"; ok_bounds = False
+                    if ok_bounds and isinstance(rules, dict) and rules.get("not_after_code"):
+                        other_code = str(rules.get("not_after_code"))
+                        other_val = answers.get(other_code)
+                        if other_val:
+                            ov, oerr = coerce_date(str(other_val))
+                            if not oerr and ov and val > ov:
+                                errors[code] = "after_other_date"; ok_bounds = False
                     # age-based rules relative to today (e.g., DOB must be at least N years old)
                     if ok_bounds and isinstance(rules, dict) and ("min_age_years" in rules or "max_age_years" in rules):
                         d_obj = datetime.strptime(val, "%Y-%m-%d").date()

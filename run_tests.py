@@ -1,11 +1,45 @@
 import subprocess
 import sys
 import os
+import textwrap
+
+try:
+    import requests  # type: ignore
+except Exception:
+    requests = None
+
+# Cargar .env para que las pruebas hereden configuración (DB, etc.)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
 
 def run_tests():
     """Ejecutar pruebas de forma inteligente"""
     print("🧪 EJECUTANDO PRUEBAS UNITARIAS - STEM VOCACIONAL")
     print("=" * 60)
+    py = sys.executable  # Usar el intérprete actual (venv)
+    # Asegurar que los subprocesos usan el mismo entorno
+    base_env = os.environ.copy()
+    if not base_env.get("TEST_BASE_URL"):
+        base_env["TEST_BASE_URL"] = "http://127.0.0.1:5000"
+    print(f"TEST_BASE_URL: {base_env['TEST_BASE_URL']}")
+
+    # Preflight: comprobar que el backend responde para evitar falsos negativos
+    if requests is not None:
+        try:
+            r = requests.get(f"{base_env['TEST_BASE_URL']}/api/health", timeout=2)
+            if r.status_code != 200:
+                raise RuntimeError(f"/api/health devolvió {r.status_code}")
+        except Exception as e:
+            print("\n⚠️ Backend no responde en", base_env['TEST_BASE_URL'])
+            print("Sugerencias:")
+            print(" - Asegúrate de tener el backend corriendo en otra terminal:")
+            print("   python manage.py run-public")
+            print(" - Si usas otro puerto/host, define TEST_BASE_URL antes de correr pruebas:")
+            print("   $env:TEST_BASE_URL = 'http://127.0.0.1:5000' ; python run_tests.py")
+            return False
     
     # Verificar estructura básica
     if not os.path.exists('tests'):
@@ -26,37 +60,26 @@ def run_tests():
     commands = [
         {
             "name": "🔍 Verificar pytest",
-            "cmd": ["python", "-m", "pytest", "--version"],
+            "cmd": [py, "-m", "pytest", "--version"],
             "show_output": True,
             "show_errors": False
         },
         {
-            "name": "� Listar pruebas disponibles",
-            "cmd": ["python", "-m", "pytest", "tests/", "--collect-only", "-q"],
+            "name": "📋 Listar pruebas disponibles",
+            "cmd": [py, "-m", "pytest", "tests/", "--collect-only", "-q"],
             "show_output": True,
             "show_errors": True
         },
         {
             "name": "🧪 Ejecutar UNA prueba simple",
-            "cmd": ["python", "-m", "pytest", "tests/test_database/test_config.py::test_database_config_defaults", "-v"],
+            "cmd": [py, "-m", "pytest", "tests/test_backend/test_api/test_health_and_cors.py::test_health_endpoint_ok", "-v"],
             "show_output": True,
             "show_errors": True
         },
-        {
-            "name": "🗄️ Solo pruebas de base de datos",
-            "cmd": ["python", "-m", "pytest", "tests/test_database/", "-v", "--tb=short"],
-            "show_output": True,
-            "show_errors": True
-        },
-        {
-            "name": "👤 Solo pruebas de controladores",
-            "cmd": ["python", "-m", "pytest", "tests/test_backend/test_controllers/", "-v", "--tb=short"],
-            "show_output": True,
-            "show_errors": True
-        },
+        # Directorios no presentes aún se omiten para evitar ruido
         {
             "name": "🌐 Todas las pruebas (continuar en errores)",
-            "cmd": ["python", "-m", "pytest", "tests/", "-v", "--tb=short", "--continue-on-collection-errors"],
+            "cmd": [py, "-m", "pytest", "tests/", "-v", "--tb=short", "--continue-on-collection-errors"],
             "show_output": True,
             "show_errors": True
         }
@@ -73,7 +96,8 @@ def run_tests():
                 test_config['cmd'], 
                 capture_output=True, 
                 text=True, 
-                timeout=120
+                timeout=120,
+                env=base_env
             )
             
             if result.returncode == 0:

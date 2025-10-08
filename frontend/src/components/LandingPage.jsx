@@ -1,26 +1,28 @@
 import { useEffect, useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { Link } from "react-router-dom"
 
 export default function LandingPage() {
   const [darkMode, setDarkMode] = useState(false)
-  const navigate = useNavigate()
 
   const toggleDarkMode = () => {
     setDarkMode(!darkMode)
     document.body.classList.toggle("dark-mode")
   }
 
-  // If a session exists, immediately redirect away from landing
+  // No redirige automáticamente: el landing siempre es el punto de entrada.
+  // Si existe una sesión activa de estudiante en esta ventana, sólo sincroniza el usuario mínimo para esta pestaña.
   useEffect(() => {
     try {
-      const adminToken = localStorage.getItem('admin_token')
-      if (adminToken) { navigate('/admin', { replace: true }); return }
+      const s = JSON.parse(localStorage.getItem('active_session') || 'null')
+      if (s && s.type === 'student' && s.code) {
+        const existing = JSON.parse(sessionStorage.getItem('usuario') || 'null')
+        if (!existing || !existing.id_usuario) {
+          const minimal = { codigo_estudiante: s.code, id_usuario: -1 }
+          try { sessionStorage.setItem('usuario', JSON.stringify(minimal)) } catch {}
+        }
+      }
     } catch (_) {}
-    try {
-      const u = JSON.parse(sessionStorage.getItem('usuario') || 'null')
-      if (u && u.id_usuario) { navigate('/dashboard', { replace: true }); }
-    } catch (_) {}
-  }, [navigate])
+  }, [])
 
   return (
     <div

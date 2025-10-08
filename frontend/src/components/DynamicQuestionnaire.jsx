@@ -1,16 +1,79 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { getDynamicQuestionnaire, getMyDynamicStatus, saveDynamicResponse, finalizeDynamicResponse, saveDynamicResponseKeepAlive } from "../api";
+import { getDynamicQuestionnaire, getMyDynamicStatus, saveDynamicResponse, finalizeDynamicResponse, saveDynamicResponseKeepAlive, getPrefillValues } from "../api";
 
-function InputForQuestion({ q, value, onChange, disabled }) {
+function InputForQuestion({ q, value, onChange, disabled, answers, fieldErrors }) {
   const common = { className: "form-control", style: { width:"100%" }, disabled: !!disabled };
+
+  // Helpers for date bounds based on rules and other answers
+  const computeDateBounds = (q) => {
+    const r = q.validation_rules || {};
+    let minAttr = undefined;
+    let maxAttr = undefined;
+    const today = new Date();
+    const fmt = (d) => d.toISOString().slice(0,10);
+    if (r.min_date) minAttr = String(r.min_date);
+    if (r.max_date) maxAttr = String(r.max_date);
+    if (r.not_after_today) {
+      const t = fmt(today);
+      maxAttr = maxAttr ? (t < maxAttr ? t : maxAttr) : t;
+    }
+    if (r.min_year) {
+      const y = parseInt(r.min_year, 10); if (!isNaN(y)) {
+        const d = new Date(Date.UTC(y, 0, 1));
+        const s = fmt(d);
+        minAttr = minAttr ? (s > minAttr ? s : minAttr) : s;
+      }
+    }
+    if (r.max_year) {
+      const y = parseInt(r.max_year, 10); if (!isNaN(y)) {
+        const d = new Date(Date.UTC(y, 11, 31));
+        const s = fmt(d);
+        maxAttr = maxAttr ? (s < maxAttr ? s : maxAttr) : s;
+      }
+    }
+    if (r.min_age_years) {
+      const n = parseInt(r.min_age_years, 10); if (!isNaN(n)) {
+        const d = new Date(Date.UTC(today.getUTCFullYear()-n, today.getUTCMonth(), today.getUTCDate()));
+        const s = fmt(d);
+        // fecha debe ser <= hoy - n -> max
+        maxAttr = maxAttr ? (s < maxAttr ? s : maxAttr) : s;
+      }
+    }
+    if (r.max_age_years) {
+      const n = parseInt(r.max_age_years, 10); if (!isNaN(n)) {
+        const d = new Date(Date.UTC(today.getUTCFullYear()-n, today.getUTCMonth(), today.getUTCDate()));
+        const s = fmt(d);
+        // fecha debe ser >= hoy - n -> min
+        minAttr = minAttr ? (s > minAttr ? s : minAttr) : s;
+      }
+    }
+    if (r.not_before_code && answers) {
+      const other = answers[r.not_before_code];
+      if (other) minAttr = String(other);
+    }
+    if (r.not_after_code && answers) {
+      const other = answers[r.not_after_code];
+      if (other) maxAttr = String(other);
+    }
+    return { minAttr, maxAttr };
+  };
   switch (q.type) {
     case "textarea":
       return <textarea {...common} value={value || ""} onChange={e => onChange(e.target.value)} rows={3} />;
-    case "number":
-      return <input {...common} type="number" value={value ?? ""} onChange={e => onChange(e.target.value === "" ? "" : Number(e.target.value))} />;
+    case "number": {
+      const vr = q.validation_rules || {};
+      const props = { min: vr.min ?? undefined, max: vr.max ?? undefined, step: 1 };
+      const isIcfesGlobal = q.code === 'puntaje_global_saber11';
+      return <input {...common} {...props} type="number" value={value ?? ""} onChange={e => onChange(e.target.value === "" ? "" : Number(e.target.value))} disabled={!!disabled || isIcfesGlobal} />;
+    }
     case "date":
-      return <input {...common} type="date" value={value || ""} onChange={e => onChange(e.target.value)} />;
+      {
+        const { minAttr, maxAttr } = computeDateBounds(q);
+        return <input {...common} type="date" min={minAttr} max={maxAttr} value={value || ""} onChange={e => onChange(e.target.value)} />;
+      }
+    case "email":
+      return <input {...common} type="email" value={value || ""} onChange={e => onChange(e.target.value)} />;
     case "boolean":
       return (
         <div style={{display:"flex", gap:"1rem"}}>
@@ -23,38 +86,102 @@ function InputForQuestion({ q, value, onChange, disabled }) {
         </div>
       );
     case "single_choice":
-    case "choice":
-      return (
-        <div style={{display:"flex", flexWrap:"wrap", gap:"1rem"}}>
-          {q.options?.map(op => (
-            <label key={op.value} style={{display:"flex", alignItems:"center", gap:"0.5rem"}}>
-              <input type="radio" disabled={!!disabled} name={q.code} value={op.value} checked={value === op.value} onChange={() => onChange(op.value)} />
-              {op.label}
-            </label>
-          ))}
-        </div>
-      );
-    case "multi_choice":
+    case "choice": {
+      const hasOther = (q.options || []).some(op => op.is_other);
+      const selectedIsOther = hasOther && value && (q.options || []).some(op => op.is_other && op.value === value);
       return (
         <div style={{display:"flex", flexDirection:"column", gap:"0.5rem"}}>
-          {q.options?.map(op => {
-            const checked = Array.isArray(value) && value.includes(op.value);
+          <div style={{display:"flex", flexWrap:"wrap", gap:"1rem"}}>
+            {q.options?.map(op => (
+              <label key={op.value} style={{display:"flex", alignItems:"center", gap:"0.5rem"}}>
+                <input type="radio" disabled={!!disabled} name={q.code} value={op.value} checked={value === op.value} onChange={() => onChange(op.value)} />
+                {op.label}{op.is_other ? ' (Otro)' : ''}
+              </label>
+            ))}
+          </div>
+          {hasOther && (
+            <input
+              className="form-control"
+              placeholder="Especifique (otro)"
+              value={(answers && answers[`otro_${q.code}`]) || ''}
+              onChange={e => onChange({ __other: e.target.value })}
+              disabled={!selectedIsOther || !!disabled}
+            />
+          )}
+        </div>
+      );
+    }
+    case "multi_choice": {
+      // Behavior: 'Ninguna' (case-insensitive) disables others; 'Todas las anteriores' selects all except none/other
+      const options = q.options || [];
+      const isNone = (label) => /ningun|ninguna|ninguno/i.test(label || "");
+      const isAll = (label) => /todas\s+las\s+anteriores/i.test(label || "");
+      const noneOption = options.find(op => isNone(op.label));
+      const allOption = options.find(op => isAll(op.label));
+      const selected = Array.isArray(value) ? new Set(value) : new Set();
+
+      const toggle = (op, checked) => {
+        const arr = new Set(selected);
+        if (checked) {
+          // If picking NONE, clear all others and keep only NONE
+          if (noneOption && op.value === noneOption.value) {
+            arr.clear();
+            arr.add(op.value);
+          } else if (allOption && op.value === allOption.value) {
+            // Select all non-none, non-other (exclude any is_other)
+            arr.delete(noneOption?.value);
+            options.forEach(o => {
+              if (o.value === noneOption?.value) return;
+              if (o.is_other) return; // exclude 'Otro' from 'todas las anteriores'
+              arr.add(o.value);
+            });
+          } else {
+            // selecting a normal option unselects NONE
+            arr.delete(noneOption?.value);
+            arr.add(op.value);
+          }
+        } else {
+          arr.delete(op.value);
+          // If removing last normal when ALL was selected, leave array without ALL if nothing left
+        }
+        onChange(Array.from(arr));
+      };
+
+      const noneSelected = noneOption ? selected.has(noneOption.value) : false;
+
+      return (
+        <div style={{display:"flex", flexDirection:"column", gap:"0.5rem"}}>
+          {options.map(op => {
+            const checked = selected.has(op.value);
+            const disabledOpt = !!disabled || (noneSelected && (!noneOption || op.value !== noneOption.value));
             return (
               <label key={op.value} style={{display:"flex", alignItems:"center", gap:"0.5rem"}}>
-                <input type="checkbox" disabled={!!disabled} checked={checked} onChange={e => {
-                  const arr = Array.isArray(value) ? [...value] : [];
-                  if (e.target.checked) { if (!arr.includes(op.value)) arr.push(op.value); }
-                  else { const i = arr.indexOf(op.value); if (i>=0) arr.splice(i,1); }
-                  onChange(arr);
-                }} />
-                {op.label}
+                <input type="checkbox" disabled={disabledOpt} checked={checked} onChange={e => toggle(op, e.target.checked)} />
+                {op.label}{op.is_other ? ' (Otro)' : ''}
               </label>
             );
           })}
+          {/* Sin campo de texto para multi_choice 'Otro' */}
+          {/* Inline field error */}
+          {!!fieldErrors?.length && (
+            <div style={{ color: 'crimson', fontSize: 12 }}>
+              {fieldErrors.map((m, i) => <div key={i}>{m}</div>)}
+            </div>
+          )}
         </div>
       );
+    }
     default:
-      return <input {...common} type="text" value={value || ""} onChange={e => onChange(e.target.value)} />;
+      return (
+        <>
+          <input {...common} type="text" value={value || ""} onChange={e => onChange(e.target.value)} />
+          {!!fieldErrors?.length && (
+            <div style={{ color: 'crimson', fontSize: 12 }}>
+              {fieldErrors.map((m, i) => <div key={i}>{m}</div>)}
+            </div>
+          )}
+        </>
+      );
   }
 }
 
@@ -64,7 +191,17 @@ export default function DynamicQuestionnaire() {
   const location = useLocation();
   let { usuario } = location.state || {};
   if (!usuario) {
-    try { const u = JSON.parse(sessionStorage.getItem('usuario') || 'null'); if (u && u.id_usuario) usuario = u; } catch (_) {}
+    try { const u = JSON.parse(sessionStorage.getItem('usuario') || 'null'); if (u && (u.id_usuario !== undefined)) usuario = u; } catch (_) {}
+  }
+  // Cross-tab support: if no sessionStorage but there is an active student session in localStorage, synthesize minimal usuario
+  if (!usuario) {
+    try {
+      const s = JSON.parse(localStorage.getItem('active_session') || 'null');
+      if (s && s.type === 'student' && s.code) {
+        usuario = { codigo_estudiante: s.code, id_usuario: -1 };
+        try { sessionStorage.setItem('usuario', JSON.stringify(usuario)); } catch (_) {}
+      }
+    } catch (_) {}
   }
   useEffect(() => {
     if (!usuario) navigate('/login');
@@ -73,11 +210,43 @@ export default function DynamicQuestionnaire() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [answers, setAnswers] = useState({});
-  const [userCode, setUserCode] = useState(usuario?.codigo_estudiante || "");
+  // userCode input removed: always use usuario/session
   const [submitMsg, setSubmitMsg] = useState("");
   const [submitErr, setSubmitErr] = useState("");
   const [finalized, setFinalized] = useState(false);
   const [openSections, setOpenSections] = useState({});
+  const [busySave, setBusySave] = useState(false);
+  const [busyFinalize, setBusyFinalize] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({}); // { [qcode]: [messages] }
+
+  // Helper to coerce raw answers from backend into proper JS types based on questionnaire structure
+  const coerceAnswers = (structure, raw) => {
+    const out = {};
+    if (!raw || typeof raw !== 'object') return out;
+    const typeByCode = {};
+    (structure?.sections || []).forEach(sec => (sec.questions || []).forEach(q => { typeByCode[q.code] = q.type; }));
+    for (const [k, v] of Object.entries(raw)) {
+      const t = typeByCode[k];
+      if (t === 'boolean') {
+        if (v === true || v === false) out[k] = v;
+        else if (v === 1 || v === '1' || v === 'true' || v === 'True' || v === 'TRUE') out[k] = true;
+        else if (v === 0 || v === '0' || v === 'false' || v === 'False' || v === 'FALSE') out[k] = false;
+        else out[k] = undefined;
+      } else if (t === 'number') {
+        if (v === '' || v === null || v === undefined) out[k] = '';
+        else out[k] = Number(v);
+      } else if (t === 'multi_choice') {
+        if (Array.isArray(v)) out[k] = v;
+        else if (typeof v === 'string') {
+          try { out[k] = v.includes('|') ? v.split('|').filter(Boolean) : JSON.parse(v); }
+          catch { out[k] = v ? [v] : []; }
+        } else out[k] = [];
+      } else {
+        out[k] = v;
+      }
+    }
+    return out;
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -89,8 +258,27 @@ export default function DynamicQuestionnaire() {
           const mine = await getMyDynamicStatus(code, usuario.codigo_estudiante);
           if (mounted && mine) {
             setFinalized(mine.status === 'finalized');
-            if (mine.answers) setAnswers(mine.answers);
+            if (mine.answers) setAnswers(coerceAnswers(res?.questionnaire, mine.answers));
           }
+          // Prefill for unanswered fields using values from other questionnaires
+          try {
+            const structure = res?.questionnaire;
+            const allCodes = [];
+            (structure?.sections || []).forEach(sec => (sec.questions || []).forEach(q => allCodes.push(q.code)));
+            const current = mine?.answers ? coerceAnswers(structure, mine.answers) : {};
+            const missing = allCodes.filter(c => current[c] === undefined || current[c] === null || current[c] === "");
+            if (missing.length) {
+              const pf = await getPrefillValues(usuario.codigo_estudiante, missing);
+              const values = pf?.values || {};
+              const next = { ...(mine?.answers || {}) };
+              missing.forEach(c => {
+                if (values[c] !== undefined && values[c] !== null && next[c] === undefined) {
+                  next[c] = values[c];
+                }
+              });
+              if (mounted) setAnswers(coerceAnswers(structure, next));
+            }
+          } catch (_) { /* best-effort prefill */ }
         }
       } catch (e) {
         if (mounted) setError(e.message || "No se pudo cargar el cuestionario.");
@@ -102,7 +290,7 @@ export default function DynamicQuestionnaire() {
   }, [code, usuario?.codigo_estudiante]);
 
   // Client-side visibility evaluator (mirrors backend simple rules)
-  const evalVisible = (rule, vals) => {
+  const evalVisible = useCallback((rule, vals) => {
     if (!rule) return true;
     if (typeof rule !== 'object') return true;
     if (Array.isArray(rule.and)) return rule.and.every(r => evalVisible(r, vals));
@@ -113,7 +301,7 @@ export default function DynamicQuestionnaire() {
       return (vals ?? {})[code] === expected;
     }
     return true;
-  };
+  }, []);
 
   // Derive which sections have at least one visible question
   const visibleMap = useMemo(() => {
@@ -124,7 +312,7 @@ export default function DynamicQuestionnaire() {
       map[sec.id] = vqs.map(q => q.id);
     }
     return map;
-  }, [data, answers]);
+  }, [data, answers, evalVisible]);
 
   // Initialize open state on first load to open first section that has visible questions
   useEffect(() => {
@@ -143,30 +331,132 @@ export default function DynamicQuestionnaire() {
   }, [data, visibleMap]);
 
   const handleChange = (qcode, val) => {
-    setAnswers(prev => ({ ...prev, [qcode]: val }));
+    setAnswers(prev => {
+      const next = { ...prev };
+      if (val && typeof val === 'object' && val.__other !== undefined) {
+        // Inline "otro" textbox uses pseudo payload {__other: value}
+        next[`otro_${qcode}`] = val.__other;
+      } else {
+        next[qcode] = val;
+      }
+      // Auto-calc ICFES global if components present
+      const lc = next['puntaje_lectura_critica'];
+      const m = next['puntaje_matematicas'];
+      const sc = next['puntaje_sociales_ciudadanas'];
+      const cn = next['puntaje_ciencias_naturales'];
+      const i = next['puntaje_ingles'];
+      const allNums = [lc,m,sc,cn,i].every(v => typeof v === 'number' && !isNaN(v));
+      if (allNums) {
+        const ponderado = 3 * (lc + m + sc + cn) + i;
+        const indice = ponderado / 13;
+        const global_calc = Math.max(0, Math.min(500, Math.round(indice * 5)));
+        next['puntaje_global_saber11'] = global_calc;
+      }
+      return next;
+    });
+  };
+
+  // Client-side soft validation before save
+  const validateBeforeSave = (opts = { enforceRequired: false }) => {
+    if (!data) return null;
+    const errs = [];
+    const perField = {};
+    for (const sec of (data.sections || [])) {
+      for (const q of (sec.questions || [])) {
+        const val = answers[q.code];
+        if (q.type === 'number') {
+          if (val !== '' && val !== undefined && val !== null) {
+            const vr = q.validation_rules || {};
+            if (typeof val !== 'number' || isNaN(val)) {
+              errs.push(`${q.text}: valor inválido`);
+              perField[q.code] = [...(perField[q.code]||[]), 'Valor inválido'];
+            } else {
+              if (vr.min !== undefined && val < vr.min) { errs.push(`${q.text}: menor que ${vr.min}`); perField[q.code] = [...(perField[q.code]||[]), `Debe ser ≥ ${vr.min}`]; }
+              if (vr.max !== undefined && val > vr.max) { errs.push(`${q.text}: mayor que ${vr.max}`); perField[q.code] = [...(perField[q.code]||[]), `Debe ser ≤ ${vr.max}`]; }
+            }
+          }
+        } else if (q.type === 'date') {
+          const { minAttr, maxAttr } = (() => {
+            const r = q.validation_rules || {};
+            // reuse same logic as computeDateBounds but with current answers
+            const today = new Date();
+            const fmt = (d) => d.toISOString().slice(0,10);
+            let minAttr = r.min_date || undefined;
+            let maxAttr = r.max_date || undefined;
+            if (r.not_after_today) { const t = fmt(today); maxAttr = maxAttr ? (t < maxAttr ? t : maxAttr) : t; }
+            if (r.min_year) { const y = parseInt(r.min_year,10); if(!isNaN(y)){ const s = `${y}-01-01`; minAttr = minAttr ? (s>minAttr?s:minAttr) : s; } }
+            if (r.max_year) { const y = parseInt(r.max_year,10); if(!isNaN(y)){ const s = `${y}-12-31`; maxAttr = maxAttr ? (s<maxAttr?s:maxAttr) : s; } }
+            if (r.min_age_years) { const n=parseInt(r.min_age_years,10); if(!isNaN(n)){ const d=new Date(); d.setFullYear(d.getFullYear()-n); const s=fmt(d); maxAttr = maxAttr ? (s<maxAttr?s:maxAttr) : s; } }
+            if (r.max_age_years) { const n=parseInt(r.max_age_years,10); if(!isNaN(n)){ const d=new Date(); d.setFullYear(d.getFullYear()-n); const s=fmt(d); minAttr = minAttr ? (s>minAttr?s:minAttr) : s; } }
+            if (r.not_before_code && answers[r.not_before_code]) minAttr = answers[r.not_before_code];
+            if (r.not_after_code && answers[r.not_after_code]) maxAttr = answers[r.not_after_code];
+            return { minAttr, maxAttr };
+          })();
+          if (val) {
+            if (minAttr && val < minAttr) { errs.push(`${q.text}: fecha antes de ${minAttr}`); perField[q.code] = [...(perField[q.code]||[]), `No antes de ${minAttr}`]; }
+            if (maxAttr && val > maxAttr) { errs.push(`${q.text}: fecha después de ${maxAttr}`); perField[q.code] = [...(perField[q.code]||[]), `No después de ${maxAttr}`]; }
+          }
+        }
+        // Require inline 'otro' text if selected (only for single choice)
+        const hasOther = (q.options || []).some(op => op.is_other);
+        if (hasOther) {
+          const others = (q.options || []).filter(op => op.is_other).map(op => op.value);
+          if ((q.type === 'single_choice' || q.type === 'choice') && others.includes(val)) {
+            const t = (answers[`otro_${q.code}`] || '').toString().trim();
+            if (!t) { errs.push(`${q.text}: especifique el valor de "Otro"`); perField[q.code] = [...(perField[q.code]||[]), 'Debe especificar el valor de "Otro"']; }
+          }
+        }
+        // Required fields (only when enforcing)
+        if (opts.enforceRequired && q.required) {
+          const has = (() => {
+            if (q.type === 'multi_choice') return Array.isArray(val) && val.length > 0;
+            return val !== undefined && val !== '' && val !== null;
+          })();
+          if (!has) { errs.push(`${q.text}: campo obligatorio`); perField[q.code] = [...(perField[q.code]||[]), 'Campo obligatorio']; }
+        }
+      }
+    }
+    setFieldErrors(perField);
+    return errs.length ? errs : null;
   };
 
   const handleSave = async () => {
     setSubmitErr(""); setSubmitMsg("");
+    setBusySave(true);
     try {
-      const payload = { user_code: usuario?.codigo_estudiante || userCode || undefined, answers };
+      const errs = validateBeforeSave({ enforceRequired: false });
+      if (errs && errs.length) {
+        setSubmitErr(`Corrige valores inválidos antes de guardar: \n- ${errs.join('\n- ')}`);
+        return;
+      }
+  const payload = { user_code: usuario?.codigo_estudiante || undefined, answers };
       await saveDynamicResponse(code, payload);
       setSubmitMsg("Progreso guardado.");
     } catch (e) {
       setSubmitErr(e.message || "No se pudo guardar.");
+    } finally {
+      setBusySave(false);
     }
   };
 
   const handleFinalize = async () => {
     setSubmitErr(""); setSubmitMsg("");
+    setBusyFinalize(true);
     try {
-      const payload = { user_code: usuario?.codigo_estudiante || userCode || undefined, answers };
+      const errs = validateBeforeSave({ enforceRequired: true });
+      if (errs && errs.length) {
+        setSubmitErr(`Corrige antes de finalizar: \n- ${errs.join('\n- ')}`);
+        return;
+      }
+  const payload = { user_code: usuario?.codigo_estudiante || undefined, answers };
       await finalizeDynamicResponse(code, payload);
       setFinalized(true);
       setSubmitMsg("Cuestionario finalizado.");
       setTimeout(() => navigate("/dashboard", { state: { usuario } }), 1000);
     } catch (e) {
       setSubmitErr(e.message || "No se pudo finalizar.");
+    } finally {
+      setBusyFinalize(false);
     }
   };
 
@@ -174,13 +464,13 @@ export default function DynamicQuestionnaire() {
   useEffect(() => {
     const onBeforeUnload = (e) => {
       if (finalized) return;
-      const payload = { user_code: usuario?.codigo_estudiante || userCode || undefined, answers };
+  const payload = { user_code: usuario?.codigo_estudiante || undefined, answers };
       // fire and forget; keep it quick
       saveDynamicResponseKeepAlive(code, payload);
     };
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, [finalized, answers, code, usuario, userCode]);
+  }, [finalized, answers, code, usuario]);
 
   if (loading) return <div className="cuestionario-container"><div className="card" style={{padding:"1rem"}}>Cargando...</div></div>;
   if (error) return <div className="cuestionario-container"><div className="card" style={{padding:"1rem", color:"crimson"}}>{error}</div></div>;
@@ -199,17 +489,18 @@ export default function DynamicQuestionnaire() {
         )}
 
         <form onSubmit={(e) => e.preventDefault()} style={{display:"flex", flexDirection:"column", gap:"1rem"}}>
-          <div className="card" style={{padding:"1rem"}}>
-            <label style={{fontWeight:600, display:"block", marginBottom:"0.5rem"}}>Código de estudiante (opcional)</label>
-            <input className="form-control" type="text" value={userCode} onChange={e => setUserCode(e.target.value)} placeholder="Ej: A00123456" disabled={finalized} />
-          </div>
+          {/* Código de estudiante removido del UI; el backend asocia por sesión */}
 
           {data.sections?.map(sec => {
             const visibleQIds = visibleMap[sec.id] || [];
             const hasVisible = visibleQIds.length > 0;
             if (!hasVisible) return null;
             const isOpen = !!openSections[sec.id];
-            const answeredInSec = (sec.questions || []).filter(q => visibleQIds.includes(q.id)).reduce((acc, q) => acc + (answers[q.code] !== undefined && answers[q.code] !== "" ? 1 : 0), 0);
+            const answeredInSec = (sec.questions || []).filter(q => visibleQIds.includes(q.id)).reduce((acc, q) => {
+              const val = answers[q.code];
+              const has = q.type === 'multi_choice' ? Array.isArray(val) && val.length > 0 : (val !== undefined && val !== "");
+              return acc + (has ? 1 : 0);
+            }, 0);
             const totalInSec = visibleQIds.length;
             return (
               <fieldset key={sec.id} className="accordion-section">
@@ -228,7 +519,7 @@ export default function DynamicQuestionnaire() {
                           <label style={{display:"block", fontWeight:600, marginBottom:"0.25rem"}}>
                             {q.text} {q.required && <span style={{color:"crimson"}}>*</span>}
                           </label>
-                          <InputForQuestion q={q} value={answers[q.code]} onChange={v => handleChange(q.code, v)} disabled={finalized} />
+                          <InputForQuestion q={q} value={answers[q.code]} onChange={v => handleChange(q.code, v)} disabled={finalized} answers={answers} fieldErrors={fieldErrors[q.code]} />
                         </div>
                       ))}
                     </div>
@@ -244,8 +535,12 @@ export default function DynamicQuestionnaire() {
           <div style={{display:"flex", gap:"1rem", flexWrap:"wrap"}}>
             {!finalized && (
               <>
-                <button type="button" className="btn btn-secondary" onClick={handleSave}>Guardar</button>
-                <button type="button" className="btn btn-primary" onClick={handleFinalize}>Finalizar</button>
+                <button type="button" className="btn btn-secondary" onClick={handleSave} disabled={busySave || busyFinalize}>
+                  {busySave ? 'Guardando…' : 'Guardar'}
+                </button>
+                <button type="button" className="btn btn-primary" onClick={handleFinalize} disabled={busyFinalize || busySave}>
+                  {busyFinalize ? 'Finalizando…' : 'Finalizar'}
+                </button>
               </>
             )}
             <button type="button" className="btn" onClick={() => navigate("/dashboard", { state: { usuario } })}>{finalized ? "Volver al Dashboard" : "Cancelar"}</button>

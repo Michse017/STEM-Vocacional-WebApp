@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import LandingPage from "./components/LandingPage";
 import Login from "./components/Login";
 // Removed legacy hardcoded questionnaire in favor of dynamic primary
@@ -25,6 +25,8 @@ function AdminRoute() {
         const profile = await api('/auth/admin/me');
         if (mounted) setMe(profile);
       } catch (_) {
+        // Limpia token inválido para evitar bucles si quedó un admin_token viejo
+        try { localStorage.removeItem('admin_token'); } catch (_) {}
         if (mounted) setMe(null);
       } finally {
         if (mounted) setChecked(true);
@@ -66,6 +68,7 @@ function StudentRoute({ element }) {
 }
 
 export default function App() {
+  const enableAdmin = String(process.env.REACT_APP_ENABLE_ADMIN || "0") === "1";
   return (
     <div className="app">
       <Router>
@@ -78,7 +81,14 @@ export default function App() {
             <Route path="/dashboard" element={<StudentRoute element={<Dashboard />} />} />
             <Route path="/dynamic" element={<DynamicList />} />
             <Route path="/dynamic/:code" element={<DynamicQuestionnaire />} />
-            <Route path="/admin" element={<AdminRoute />} />
+            {enableAdmin ? (
+              <Route path="/admin" element={<AdminRoute />} />
+            ) : (
+              // Si admin está deshabilitado, cualquier intento de ir a /admin vuelve al landing
+              <Route path="/admin" element={<Navigate to="/" replace />} />
+            )}
+            {/* Catch-all: vuelve al landing para rutas desconocidas */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
         <footer className="footer">
