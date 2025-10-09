@@ -68,7 +68,7 @@ function StudentRoute({ element }) {
 }
 
 export default function App() {
-  const enableAdmin = String(process.env.REACT_APP_ENABLE_ADMIN || "0") === "1";
+  const enableAdmin = String(process.env.REACT_APP_ENABLE_ADMIN || process.env.react_app_enable_admin || "1") === "1";
   return (
     <div className="app">
       <Router>
