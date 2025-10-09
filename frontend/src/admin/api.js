@@ -1,4 +1,12 @@
-const API_BASE = process.env.REACT_APP_ADMIN_API_BASE || 'http://localhost:5000/api';
+const API_BASE = process.env.REACT_APP_ADMIN_API_BASE || (
+  (typeof window !== "undefined" && (
+    window.location.hostname === "localhost" ||
+    window.location.hostname.startsWith("127.") ||
+    window.location.hostname.endsWith(".local")
+  ))
+    ? "http://localhost:5000/api"
+    : "https://stem-backend-9sc0.onrender.com/api"
+);
 const ADMIN_ACCESS_KEY = process.env.REACT_APP_ADMIN_ACCESS_KEY || '';
 
 export async function api(path, opts = {}) {
