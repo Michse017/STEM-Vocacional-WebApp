@@ -48,6 +48,7 @@ def create_app():
             os.environ.get('FRONTEND_URL', 'https://stem-vocacional-webapp.vercel.app'),
             'https://stem-vocacional-web-app.vercel.app',
             'https://estem-iota.vercel.app',
+            'https://stem-vocacional-web-3h18qe8wm-michse017s-projects.vercel.app',
             "http://localhost:3000",
         ]
         CORS(app, resources={r"/api/*": {"origins": allowed_origins, "allow_headers": ["Content-Type", "Authorization", "X-Admin-Access"]}}, supports_credentials=True)
