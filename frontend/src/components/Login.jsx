@@ -88,11 +88,13 @@ export default function Login() {
       if (isAdmin) {
         // Admin login via JWT
         if (!adminPassword.trim()) throw new Error("Por favor, ingresa tu contraseña.")
+        console.log('[Admin Login] Intentando login con:', codigoEstudiante)
         const res = await adminApi('/auth/admin/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ codigo: codigoEstudiante, password: adminPassword })
         })
+        console.log('[Admin Login] Respuesta:', res)
         if (res?.access_token) {
           try { localStorage.setItem('admin_token', res.access_token) } catch (_) {}
           try { localStorage.setItem('active_session', JSON.stringify({ type: 'admin', at: Date.now() })) } catch (_) {}
