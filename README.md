@@ -82,9 +82,9 @@ See `.env.example` and configure your local `.env` (do not publish it):
 
 - FLASK_ENV, SECRET_KEY, FRONTEND_URL
 - DB_SERVER, DB_DATABASE, DB_USER, DB_PASSWORD, DB_DRIVER, DB_PORT
-- ENABLE_DYNAMIC_QUESTIONNAIRES=1
 - JWT_EXPIRES_MIN, JWT_REFRESH_DAYS, JWT_REFRESH_ROTATE
-- ADMIN_HEADER_FALLBACK (keep 0 in production)
+  - Dynamic questionnaires are always enabled (no flag required)
+  - Admin auth is JWT-only (no header fallback)
 
 ## Quick Tests
 

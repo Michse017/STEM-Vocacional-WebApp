@@ -3,7 +3,7 @@
 These models implement the flexible, versioned questionnaire architecture.
 Currently minimal columns: extend per design document.
 They are added to the same SQLAlchemy Base so tables get created idempotently.
-Use the environment variable ENABLE_DYNAMIC_QUESTIONNAIRES=1 to activate related blueprints.
+Dynamic questionnaires are always enabled; no environment flag required.
 """
 from sqlalchemy import (
     Column, Integer, String, DateTime, Boolean, ForeignKey, Text, UniqueConstraint, JSON, inspect, text, Index

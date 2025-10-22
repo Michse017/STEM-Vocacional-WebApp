@@ -135,11 +135,5 @@ def require_admin(fn):
                     adm = db.get(AdminUser, int(payload["sub"]))
                     if adm and adm.is_active:
                         return fn(*args, **kwargs)
-        # Optional fallback via shared header during transition
-        if os.environ.get("ADMIN_HEADER_FALLBACK", "0") == "1":
-            configured_key = os.environ.get("ADMIN_ACCESS_KEY")
-            provided = request.headers.get("X-Admin-Access", "")
-            if configured_key and provided == configured_key:
-                return fn(*args, **kwargs)
         return jsonify({"error": "unauthorized"}), 401
     return wrapper

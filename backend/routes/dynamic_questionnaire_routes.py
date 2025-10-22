@@ -401,7 +401,7 @@ def finalize_response(code: str):
 # --- Helpers ---
 
 def _feature_enabled():
-	return current_app.config.get("ENABLE_DYNAMIC_QUESTIONNAIRES") == True
+	return True
 
 def _serialize_version(version: QuestionnaireVersion):
 	q = version.questionnaire if hasattr(version, "questionnaire") else None

@@ -28,9 +28,8 @@ Tip: check API health at http://127.0.0.1:5000/api/health after starting the bac
 - SECRET_KEY: Flask session key (set a strong value in production)
 - FRONTEND_URL: CORS allowed origin for dev (e.g., http://localhost:3000)
 - DB_SERVER, DB_DATABASE, DB_USER, DB_PASSWORD, DB_DRIVER, DB_PORT
-- ENABLE_DYNAMIC_QUESTIONNAIRES=1 to enable the dynamic engine
 - JWT_EXPIRES_MIN, JWT_REFRESH_DAYS, JWT_REFRESH_ROTATE
-- ADMIN_HEADER_FALLBACK=0 (keep 0 in production)
+	- Dynamic questionnaires are always enabled; no flag needed.
 
 Note: never publish DB_PASSWORD or SECRET_KEY. Use a local `.env` or CI/CD secrets.
 
@@ -153,7 +152,7 @@ FK map
 ## Security & best practices
 
 - Do not commit `.env`. Use `.env.example` as guidance.
-- Keep `ADMIN_HEADER_FALLBACK=0` in production; always use JWT for admin.
+- Admin header fallback has been removed; admin auth is JWT-only.
 - Refresh cookies (admin) are HttpOnly; in production use HTTPS and `Secure` flag.
 - CORS: allow `FRONTEND_URL` in dev; restrict origins in production.
 - Rate limiting enabled for sensitive routes.

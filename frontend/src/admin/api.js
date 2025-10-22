@@ -7,11 +7,10 @@ const API_BASE = process.env.REACT_APP_ADMIN_API_BASE || (
     ? "http://localhost:5000/api"
     : "https://stem-backend-9sc0.onrender.com/api"
 );
-const ADMIN_ACCESS_KEY = process.env.REACT_APP_ADMIN_ACCESS_KEY || '';
+// Admin API now uses JWT-only auth; no shared header fallback
 
 export async function api(path, opts = {}) {
   const headers = new Headers(opts.headers || {});
-  if (ADMIN_ACCESS_KEY) headers.set('X-Admin-Access', ADMIN_ACCESS_KEY);
   // Optional JWT from localStorage (set after /auth/admin/login)
   try {
     const token = localStorage.getItem('admin_token');

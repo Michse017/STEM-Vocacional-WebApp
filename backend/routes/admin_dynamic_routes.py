@@ -1,6 +1,5 @@
 """Admin endpoints (CRUD + lifecycle) for dynamic questionnaires.
-Feature-flagged by ENABLE_DYNAMIC_QUESTIONNAIRES.
-Authentication/authorization NOT yet enforced (add later) – do NOT expose to production without guards.
+Always available; guarded by JWT via require_admin.
 """
 from flask import Blueprint, request, jsonify, current_app
 from backend.services.auth_admin_service import require_admin
@@ -19,7 +18,7 @@ admin_dynamic_bp = Blueprint("admin_dynamic", __name__)
 # --- Helpers ---
 
 def _enabled():
-	return current_app.config.get("ENABLE_DYNAMIC_QUESTIONNAIRES") is True
+	return True
 
 def _error(msg, status=400, **extra):
 	body = {"error": msg}

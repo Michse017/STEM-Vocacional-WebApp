@@ -31,8 +31,7 @@ def create_app():
     app.config['JWT_SIGNING_SECRET'] = os.urandom(32).hex()
     # Per-process instance id (used by frontend to invalidate client sessions on restart)
     app.config['INSTANCE_ID'] = uuid.uuid4().hex
-    # Legacy shared admin key (optional; used only when ADMIN_HEADER_FALLBACK=1)
-    app.config['ADMIN_ACCESS_KEY'] = os.environ.get('ADMIN_ACCESS_KEY')
+    # Admin header fallback removed; JWT-only enforced for admin endpoints
 
     if os.environ.get('FLASK_ENV') == 'production':
         # Require a real secret key in production
@@ -51,9 +50,9 @@ def create_app():
             'https://stem-vocacional-web-3h18qe8wm-michse017s-projects.vercel.app',
             "http://localhost:3000",
         ]
-        CORS(app, resources={r"/api/*": {"origins": allowed_origins, "allow_headers": ["Content-Type", "Authorization", "X-Admin-Access"]}}, supports_credentials=True)
+        CORS(app, resources={r"/api/*": {"origins": allowed_origins, "allow_headers": ["Content-Type", "Authorization"]}}, supports_credentials=True)
     else:
-        CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000"], "allow_headers": ["Content-Type", "Authorization", "X-Admin-Access"]}}, supports_credentials=True)
+        CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000"], "allow_headers": ["Content-Type", "Authorization"]}}, supports_credentials=True)
 
     app.register_blueprint(usuario_bp, url_prefix='/api')
     # Legacy questionnaire removed from runtime.
@@ -61,10 +60,9 @@ def create_app():
     app.register_blueprint(auth_admin_bp, url_prefix='/api')
     # Admin endpoints (guarded by JWT and optional header fallback). Always mounted; feature flag controls dynamic ops.
     app.register_blueprint(admin_dynamic_bp, url_prefix='/api')
-    # Dynamic questionnaires (initial scaffold) - behind feature flag
-    app.config['ENABLE_DYNAMIC_QUESTIONNAIRES'] = os.environ.get('ENABLE_DYNAMIC_QUESTIONNAIRES', '1') == '1'
-    if app.config['ENABLE_DYNAMIC_QUESTIONNAIRES']:
-        app.register_blueprint(dynamic_questionnaire_bp, url_prefix='/api')
+    # Dynamic questionnaires always enabled
+    app.config['ENABLE_DYNAMIC_QUESTIONNAIRES'] = True
+    app.register_blueprint(dynamic_questionnaire_bp, url_prefix='/api')
 
     @app.route('/')
     def home():
@@ -75,7 +73,7 @@ def create_app():
             "endpoints": [
                 "/api/health", 
                 "/api/usuarios", 
-                *( ["/api/dynamic/questionnaires"] if app.config.get('ENABLE_DYNAMIC_QUESTIONNAIRES') else [] )
+                "/api/dynamic/questionnaires"
             ],
         })
 

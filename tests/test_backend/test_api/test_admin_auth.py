@@ -8,3 +8,10 @@ def test_admin_requires_auth():
     # Hitting an admin-only endpoint should return 401/403 without proper auth
     r = requests.get(f"{BASE_URL}/api/admin/questionnaires", timeout=10)
     assert r.status_code in (401, 403)
+
+
+def test_admin_header_fallback_removed():
+    # Sending legacy X-Admin-Access must NOT grant access anymore
+    headers = {"X-Admin-Access": "anything"}
+    r = requests.get(f"{BASE_URL}/api/admin/questionnaires", headers=headers, timeout=10)
+    assert r.status_code in (401, 403)

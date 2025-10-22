@@ -23,10 +23,11 @@ def parse_args():
     def add_common(p):
         p.add_argument("--host", default="127.0.0.1")
         p.add_argument("--port", type=int)
-        p.add_argument("--no-dynamic", action="store_true", help="Disable dynamic questionnaires flag for this run")
 
     p_pub = sub.add_parser("run-public", help="Run public app (app.py)")
     add_common(p_pub)
+    # Dynamic questionnaires are always enabled; flag deprecated
+    p_pub.add_argument("--no-dynamic", action="store_true", help="(deprecated) Dynamic questionnaires are always enabled")
 
     # Deprecated admin-only launchers (single app now). Use run-admin-ui to only start frontend with admin enabled.
     p_adm_ui = sub.add_parser("run-admin-ui", help="Start only the frontend with admin enabled (backend must be running on 5000)")
@@ -42,6 +43,8 @@ def parse_args():
     p_pub_full.add_argument("--frontend-path", default="frontend", help="Relative path to frontend folder")
     p_pub_full.add_argument("--silent-frontend", action="store_true", help="Do not attach frontend output (fire & forget)")
     p_pub_full.add_argument("--node-cmd", default="npm", help="Frontend start command (npm|yarn|pnpm or path to executable)")
+    # Dynamic questionnaires are always enabled; flag deprecated
+    p_pub_full.add_argument("--no-dynamic", action="store_true", help="(deprecated) Dynamic questionnaires are always enabled")
 
     sub.add_parser("seed-dynamic", help="Seed legacy questionnaire into dynamic tables")
 
@@ -61,14 +64,12 @@ def parse_args():
 
 
 def set_flag(enabled: bool):
-    if enabled:
-        os.environ["ENABLE_DYNAMIC_QUESTIONNAIRES"] = "1"
-    else:
-        os.environ.pop("ENABLE_DYNAMIC_QUESTIONNAIRES", None)
+    # No-op: dynamic questionnaires are always enabled
+    pass
 
 
 def run_public(host: str, port: int | None, dynamic: bool):
-    set_flag(dynamic)
+    set_flag(True)
     # Use legacy root app entrypoint
     from app import create_app  # type: ignore
     app = create_app()
@@ -160,7 +161,7 @@ def run_public_full(host: str, port: int | None, dynamic: bool, debug: bool, fro
     - Admin UI disabled in frontend.
     - Dynamic questionnaires enabled by default unless --no-dynamic.
     """
-    set_flag(dynamic)
+    set_flag(True)
     # 1) Start backend in a child process
     backend_host = host
     backend_port = port or 5000
@@ -169,7 +170,8 @@ def run_public_full(host: str, port: int | None, dynamic: bool, debug: bool, fro
         sys.executable,
         "-c",
         (
-            "import os; os.environ.setdefault('ENABLE_DYNAMIC_QUESTIONNAIRES','1');"
+            # Dynamic is always enabled; no flag necessary
+            "import os;"
             "from app import create_app; app=create_app();"
             f"app.run(host='{backend_host}', port={backend_port}, debug=False)"
         ),
