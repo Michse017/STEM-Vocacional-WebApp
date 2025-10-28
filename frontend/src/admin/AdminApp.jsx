@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import './admin.css';
-//
+// Views
 import { VersionEditor } from './components/VersionEditor';
-import { CreateQuestionnaire } from './components/CreateQuestionnaire';
-import { Sidebar } from './components/Sidebar';
+import { QuestionnairesGrid } from './components/QuestionnairesGrid';
+import { QuestionnairePanel } from './components/QuestionnairePanel';
 import { UsersPanel } from './components/UsersPanel';
+import { UsersTable } from './components/UsersTable';
+import { Segmented } from './components/ui/Segmented';
 
 // QuestionnaireList moved to components/QuestionnaireList.jsx
 
@@ -13,7 +15,10 @@ import { UsersPanel } from './components/UsersPanel';
 // VersionEditor / SectionBlock / QuestionBlock / OptionRow moved to components/*.jsx
 
 export default function AdminApp() {
-  const [refreshSignal, setRefreshSignal] = useState(0);
+  // Navigation state
+  // modes: 'cuestionarios' | 'usuarios' | 'panel' | 'version'
+  const [mode, setMode] = useState('cuestionarios');
+  const [selectedCode, setSelectedCode] = useState(null);
   const [openVersion, setOpenVersion] = useState(null);
   const logout = async () => {
     try { await fetch(`${(process.env.REACT_APP_ADMIN_API_BASE || 'http://localhost:5000/api')}/auth/admin/logout`, { method:'POST', credentials:'include' }); } catch (_) {}
@@ -40,20 +45,68 @@ export default function AdminApp() {
         </h1>
         <button onClick={logout} className='btn btn-secondary' style={{ position:'absolute', right:0, top:0 }}>Cerrar sesión</button>
         <p style={{ color: 'var(--text-muted)' }}>Crea, edita y publica cuestionarios. Administra usuarios por código.</p>
-      </div>
-      <div style={{ display: 'grid', gap: 24, gridTemplateColumns: openVersion ? '360px 1fr' : '380px 1fr' }}>
-        <div style={{ display: 'grid', gap: 16, alignSelf: 'start' }}>
-          <div className='card'>
-            <CreateQuestionnaire onCreated={() => setRefreshSignal(s => s + 1)} />
-          </div>
-          <div className='card'>
-            <UsersPanel />
-          </div>
-          <Sidebar refreshSignal={refreshSignal} onSelectVersion={setOpenVersion} />
+        {/* Top segmented navigation with animated indicator */}
+        <div style={{ display:'grid', placeItems:'center', marginTop: 12 }}>
+          <Segmented
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: 'cuestionarios', label: 'Cuestionarios' },
+              { value: 'usuarios', label: 'Control de usuarios' }
+            ]}
+          />
         </div>
-        {openVersion && <div className='card'><VersionEditor versionId={openVersion} onClose={() => setOpenVersion(null)} onRefreshList={() => setRefreshSignal(s => s + 1)} /></div>}
+      </div>
+      {/* Main area */}
+      <div style={{ display:'grid', gap: 16 }}>
+        {mode === 'cuestionarios' && (
+          <QuestionnairesGrid onOpenPanel={(code)=>{ setSelectedCode(code); setMode('panel'); }} />
+        )}
+
+        {mode === 'panel' && selectedCode && (
+          <QuestionnairePanel
+            code={selectedCode}
+            onBack={()=>setMode('cuestionarios')}
+            onOpenVersion={(id)=>{ setOpenVersion(id); setMode('version'); }}
+          />
+        )}
+
+        {mode === 'version' && openVersion && (
+          <div className='card'>
+            <VersionEditor versionId={openVersion} onClose={()=>setMode('panel')} onRefreshList={()=>{ /* panel reloads on open */ }} />
+          </div>
+        )}
+
+        {mode === 'usuarios' && (
+          <div style={{ display:'grid', gap: 16 }}>
+            <div className='card'>
+              <UsersPanel />
+            </div>
+            <UsersModuleTable />
+          </div>
+        )}
       </div>
       <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Borrador: edita y publica. Las versiones publicadas son inmutables.</p>
+    </div>
+  );
+}
+
+// Inline helper to show UsersTable only when requested
+function UsersModuleTable() {
+  const [show, setShow] = useState(false);
+  return (
+    <div className='card'>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <h2 className='admin-h2'>Usuarios registrados</h2>
+        <button className='btn btn-secondary btn-sm' onClick={()=>setShow(s=>!s)}>
+          {show ? 'Ocultar tabla' : 'Ver tabla'}
+        </button>
+      </div>
+      {show && (
+        <div style={{ marginTop: 8 }}>
+          <UsersTable />
+        </div>
+      )}
     </div>
   );
 }

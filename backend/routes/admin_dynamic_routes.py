@@ -12,6 +12,7 @@ from database.dynamic_models import (
 	QuestionnaireAssignment, Response, ResponseItem
 )
 from database.controller import SessionLocal, get_usuario_by_codigo, create_usuario
+from database.models import Usuario
 
 admin_dynamic_bp = Blueprint("admin_dynamic", __name__)
 
@@ -101,6 +102,20 @@ def _serialize_version(version: QuestionnaireVersion):
 			for sec in sorted(version.sections, key=lambda s: s.order)
 		]
 	}
+
+# --- Utility serializers/helpers ---
+
+def _parse_value(item: ResponseItem):
+	"""Parse stored ResponseItem into a JSON-friendly value consistent with public API."""
+	if item.numeric_value is not None:
+		return item.numeric_value
+	if item.value is None:
+		return None
+	if item.value in ("true", "false"):
+		return item.value == "true"
+	if "," in item.value and item.value.count(",") >= 1:
+		return [v for v in item.value.split(",") if v]
+	return item.value
 
 # --- Questionnaire CRUD ---
 
@@ -196,6 +211,52 @@ def admin_create_user():
 	finally:
 		db.close()
 
+# --- Admin: Users listing (registered students) ---
+
+@admin_dynamic_bp.route("/admin/users", methods=["GET"])
+def list_registered_users():
+	"""List registered users with pagination and simple search.
+
+	Query params:
+	- page (default 1)
+	- page_size (default 20, max 200)
+	- q: substring to match in codigo_estudiante or username
+
+	Response:
+	{ page, page_size, total, items: [ { id_usuario, codigo_estudiante, username, created_at, last_login_at } ] }
+	"""
+	if not _enabled():
+		return _error("dynamic_disabled", 404)
+	try:
+		page = max(1, int(request.args.get("page", 1)))
+		page_size = int(request.args.get("page_size", 20))
+	except Exception:
+		page = 1; page_size = 20
+	page_size = max(1, min(200, page_size))
+	q = (request.args.get("q") or "").strip()
+	with Session(engine) as s:
+		query = s.query(Usuario)
+		if q:
+			like = f"%{q}%"
+			query = query.filter((Usuario.codigo_estudiante.ilike(like)) | (Usuario.username.ilike(like)))
+		# count
+		total = query.count()
+		rows = (query
+				.order_by(Usuario.id_usuario.desc())
+				.offset((page - 1) * page_size)
+				.limit(page_size)
+				.all())
+		items = []
+		for u in rows:
+			items.append({
+				"id_usuario": u.id_usuario,
+				"codigo_estudiante": u.codigo_estudiante,
+				"username": u.username,
+				"created_at": u.created_at.isoformat() if getattr(u, "created_at", None) else None,
+				"last_login_at": u.last_login_at.isoformat() if getattr(u, "last_login_at", None) else None,
+			})
+		return jsonify({"page": page, "page_size": page_size, "total": int(total), "items": items})
+
 @admin_dynamic_bp.route("/admin/questionnaires", methods=["POST"])
 def create_questionnaire():
 	if not _enabled():
@@ -236,6 +297,33 @@ def create_questionnaire():
 			"questionnaire": {"code": q.code, "title": q.title},
 			"version": {"id": v.id, "number": v.version_number, "status": v.status}
 		}), 201
+
+# --- Admin: Questions for a version (for viewer columns) ---
+
+@admin_dynamic_bp.route("/admin/versions/<int:version_id>/questions", methods=["GET"])
+def list_questions_for_version(version_id: int):
+	"""Return ordered list of questions for a version with codes and basic metadata.
+	Response: { items: [ { id, code, text, type, section: { id, title, order } } ] }
+	"""
+	if not _enabled():
+		return _error("dynamic_disabled", 404)
+	with Session(engine) as s:
+		v = s.get(QuestionnaireVersion, version_id)
+		if not v:
+			return _error("version_not_found", 404)
+		items = []
+		for sec in sorted(v.sections, key=lambda ss: ss.order):
+			for qu in sorted(sec.questions, key=lambda qq: qq.order):
+				items.append({
+					"id": qu.id,
+					"code": qu.code,
+					"text": qu.text,
+					"type": qu.type,
+					"required": qu.required,
+					"order": qu.order,
+					"section": {"id": sec.id, "title": sec.title, "order": sec.order}
+				})
+		return jsonify({"items": items})
 
 @admin_dynamic_bp.route("/admin/questionnaires/<code>/clone-published", methods=["POST"])
 def clone_latest_published(code: str):
@@ -656,6 +744,156 @@ def publish_version(version_id: int):
 		v.valid_from = func.now()
 		s.commit()
 		return jsonify({"message": "published", "version": {"id": v.id, "number": v.version_number}})
+
+# --- Admin: Responses viewer endpoints ---
+
+@admin_dynamic_bp.route("/admin/versions/<int:version_id>/responses/wide", methods=["GET"])
+def list_responses_wide(version_id: int):
+	"""Return a paginated, pivoted table of latest responses for the given version.
+
+	Query params:
+	- page: int (default 1)
+	- page_size: int (default 20, max 200)
+	- user_code: optional substring filter
+	- status: optional in [in_progress, submitted, finalized]
+	- date_from, date_to: ISO date-time filters on submitted_at
+
+	Response:
+	{
+	  page, page_size, total,
+	  base_columns: [..],
+	  question_codes: [..],
+	  items: [ { response_id, assignment_id, user_code, status, started_at, submitted_at, finalized_at, last_activity_at, <code>: <value>, ... } ]
+	}
+	"""
+	if not _enabled():
+		return _error("dynamic_disabled", 404)
+	page = max(1, int(request.args.get("page", 1)))
+	try:
+		page_size = int(request.args.get("page_size", 20))
+	except Exception:
+		page_size = 20
+	page_size = max(1, min(200, page_size))
+	user_code_like = (request.args.get("user_code") or "").strip()
+	status_filter = (request.args.get("status") or "").strip() or None
+	date_from = (request.args.get("date_from") or "").strip() or None
+	date_to = (request.args.get("date_to") or "").strip() or None
+
+	with Session(engine) as s:
+		v = s.get(QuestionnaireVersion, version_id)
+		if not v:
+			return _error("version_not_found", 404)
+		# Build map question_id -> code for this version
+		qid_to_code = {}
+		for sec in v.sections:
+			for qu in sec.questions:
+				qid_to_code[qu.id] = qu.code
+
+		# Subquery: latest response per assignment
+		from sqlalchemy import select as _select
+		latest_resp_sq = (
+			s.query(Response.assignment_id, func.max(Response.id).label("rid"))
+			.join(QuestionnaireAssignment, QuestionnaireAssignment.id == Response.assignment_id)
+			.filter(QuestionnaireAssignment.questionnaire_version_id == version_id)
+			.group_by(Response.assignment_id)
+			.subquery()
+		)
+		base_q = (
+			s.query(Response, QuestionnaireAssignment)
+			.join(latest_resp_sq, (Response.assignment_id == latest_resp_sq.c.assignment_id) & (Response.id == latest_resp_sq.c.rid))
+			.join(QuestionnaireAssignment, QuestionnaireAssignment.id == Response.assignment_id)
+		)
+		if user_code_like:
+			base_q = base_q.filter(QuestionnaireAssignment.user_code.ilike(f"%{user_code_like}%"))
+		if status_filter in ("in_progress", "submitted", "finalized"):
+			base_q = base_q.filter(QuestionnaireAssignment.status == status_filter)
+		from sqlalchemy import and_
+		if date_from:
+			try:
+				base_q = base_q.filter(Response.submitted_at >= date_from)
+			except Exception:
+				pass
+		if date_to:
+			try:
+				base_q = base_q.filter(Response.submitted_at <= date_to)
+			except Exception:
+				pass
+		# Count total
+		count_q = base_q.statement.with_only_columns(func.count()).order_by(None)
+		total = s.execute(count_q).scalar() or 0
+		# Page
+		rows = base_q.order_by(Response.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+		response_ids = [resp.id for (resp, _a) in rows]
+		items_map = {}
+		if response_ids:
+			items = s.query(ResponseItem).filter(ResponseItem.response_id.in_(response_ids)).all()
+			for it in items:
+				items_map.setdefault(it.response_id, []).append(it)
+		# Build rows
+		base_cols = ["response_id", "assignment_id", "user_code", "status", "started_at", "submitted_at", "finalized_at", "last_activity_at"]
+		q_codes = [qid_to_code[q.id] for sec in sorted(v.sections, key=lambda ss: ss.order) for q in sorted(sec.questions, key=lambda qq: qq.order)]
+		result_items = []
+		for (resp, assign) in rows:
+			row = {
+				"response_id": resp.id,
+				"assignment_id": assign.id,
+				"user_code": assign.user_code,
+				"status": assign.status,
+				"started_at": resp.started_at.isoformat() if resp.started_at else None,
+				"submitted_at": resp.submitted_at.isoformat() if resp.submitted_at else None,
+				"finalized_at": resp.finalized_at.isoformat() if resp.finalized_at else None,
+				"last_activity_at": assign.last_activity_at.isoformat() if assign.last_activity_at else None,
+			}
+			for it in items_map.get(resp.id, []):
+				code = qid_to_code.get(it.question_id)
+				if code:
+					row[code] = _parse_value(it)
+			result_items.append(row)
+		return jsonify({
+			"page": page,
+			"page_size": page_size,
+			"total": int(total),
+			"base_columns": base_cols,
+			"question_codes": q_codes,
+			"items": result_items,
+		})
+
+@admin_dynamic_bp.route("/admin/responses/<int:response_id>", methods=["GET"])
+def get_response_detail(response_id: int):
+	"""Return a single response with normalized items keyed by question code."""
+	if not _enabled():
+		return _error("dynamic_disabled", 404)
+	with Session(engine) as s:
+		resp = s.get(Response, response_id)
+		if not resp:
+			return _error("not_found", 404)
+		assign = s.get(QuestionnaireAssignment, resp.assignment_id)
+		# Build code map for that version
+		qid_to_code = {}
+		if assign:
+			v = s.get(QuestionnaireVersion, assign.questionnaire_version_id)
+			if v:
+				for sec in v.sections:
+					for qu in sec.questions:
+						qid_to_code[qu.id] = qu.code
+		items = s.query(ResponseItem).filter_by(response_id=resp.id).all()
+		answers = {}
+		for it in items:
+			code = qid_to_code.get(it.question_id)
+			if code:
+				answers[code] = _parse_value(it)
+		return jsonify({
+			"response": {
+				"id": resp.id,
+				"assignment_id": resp.assignment_id,
+				"user_code": assign.user_code if assign else None,
+				"status": assign.status if assign else None,
+				"started_at": resp.started_at.isoformat() if resp.started_at else None,
+				"submitted_at": resp.submitted_at.isoformat() if resp.submitted_at else None,
+				"finalized_at": resp.finalized_at.isoformat() if resp.finalized_at else None,
+				"answers": answers,
+			}
+		})
 
 # --- Edit / Delete entities (draft only) ---
 

@@ -112,7 +112,7 @@ export default function Dashboard() {
             Resumen de tu Progreso
           </h1>
           <p style={{ fontSize: "1.25rem", color: "var(--text-muted-light)" }}>
-            Hola, <span style={{ fontWeight: "600", color: "var(--primary-color)" }}>{usuario.codigo_estudiante}</span>.
+            Hola, <span style={{ fontWeight: "600", color: "var(--primary-color)" }}>{usuario.username || usuario.codigo_estudiante}</span>.
             Aquí puedes ver cuánto has avanzado.
           </p>
         </div>

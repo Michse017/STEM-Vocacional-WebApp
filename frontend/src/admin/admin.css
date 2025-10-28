@@ -13,3 +13,22 @@
 .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--surface); border:1px solid var(--border); }
 .badge-draft { background: #fff4cf; border-color: #ffe08a; }
 .badge-published { background: #d9f7d9; border-color: #a7e8a7; }
+
+/* New modern cards grid for questionnaires */
+.cards-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.q-card { border: 1px solid var(--border); background: #fff; border-radius: 14px; padding: 12px; box-shadow: 0 2px 12px rgba(2,8,20,0.06); cursor: pointer; display:grid; gap:10px; transition: box-shadow .2s, transform .05s; }
+.q-card:hover { box-shadow: 0 6px 22px rgba(2,8,20,0.14); }
+.q-card:active { transform: translateY(1px); }
+.q-card-head { display:flex; align-items:center; justify-content: space-between; gap: 6px; }
+.q-card-title { display:flex; flex-direction: column; }
+.q-card-code { font-weight: 700; font-size: 14px; }
+.q-card-sub { font-size: 12px; color: var(--text-muted); }
+.q-card-desc { font-size: 12px; color: #475569; background:#f8fafc; border:1px solid #e2e8f0; padding: 8px; border-radius: 8px; }
+.q-card-foot { display:flex; gap: 6px; align-items:center; justify-content: space-between; }
+
+/* Segmented control with animated pill */
+.segmented { position: relative; display: inline-grid; grid-auto-flow: column; gap: 0; padding: 4px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 999px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.6); }
+.seg-btn { position: relative; z-index: 1; padding: 8px 14px; border: 0; background: transparent; cursor: pointer; border-radius: 999px; color: #334155; font-weight: 600; transition: color .2s ease; }
+.seg-btn.active { color: #0f172a; }
+.seg-btn:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; border-radius: 10px; }
+.seg-indicator { position: absolute; top: 4px; left: 4px; border-radius: 999px; background: #fff; box-shadow: 0 4px 12px rgba(2,8,20,0.12), inset 0 0 0 1px #e2e8f0; transition: transform .24s cubic-bezier(.2,.8,.2,1), width .24s ease, height .24s ease; will-change: transform, width; }

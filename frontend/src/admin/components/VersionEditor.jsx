@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api';
 import { SectionBlock } from './SectionBlock';
+import { ResponsesViewer } from './ResponsesViewer';
 
 export function VersionEditor({ versionId, onClose, onRefreshList }) {
   const [version, setVersion] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [view, setView] = useState('structure'); // 'structure' | 'responses'
   const [addingSec, setAddingSec] = useState(false);
   const [newSec, setNewSec] = useState({ title: '', description: '' });
   // reserved for future inline create pattern (removed unused state to satisfy lint)
@@ -170,7 +172,11 @@ export function VersionEditor({ versionId, onClose, onRefreshList }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ margin: 0 }}>Versión v{version?.number} ({version?.status})</h3>
-        <div style={{ display: 'flex', gap: 6, flexWrap:'wrap' }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap:'wrap', alignItems:'center' }}>
+          <div style={{ display:'inline-flex', border:'1px solid #e2e8f0', borderRadius: 6, overflow:'hidden', marginRight: 8 }}>
+            <button className={'btn btn-secondary btn-sm'+(view==='structure'?' active':'')} onClick={()=>setView('structure')} disabled={busy} style={{ border:'none', borderRight:'1px solid #e2e8f0' }}>Estructura</button>
+            <button className={'btn btn-secondary btn-sm'+(view==='responses'?' active':'')} onClick={()=>setView('responses')} disabled={busy} style={{ border:'none' }}>Respuestas</button>
+          </div>
           <button className='btn btn-secondary btn-sm' onClick={toggleQuestionnaireStatus} disabled={busy}>
             {version?.questionnaire?.status === 'active' ? 'Desactivar cuestionario' : 'Activar cuestionario'}
           </button>
@@ -182,7 +188,7 @@ export function VersionEditor({ versionId, onClose, onRefreshList }) {
       </div>
       {(loading || busy) && <p>Cargando...</p>}
       {error && <p style={{ color: 'crimson' }}>Error: {error}</p>}
-      {version && (
+      {version && view === 'structure' && (
         <div style={{ display: 'grid', gap: 16 }}>
           <div>
             <div style={{ margin: '6px 0', fontSize: 12, color: '#555' }}>
@@ -243,6 +249,11 @@ export function VersionEditor({ versionId, onClose, onRefreshList }) {
               </div>
             )}
           </div>
+        </div>
+      )}
+      {version && view === 'responses' && (
+        <div style={{ display:'grid', gap: 16 }}>
+          <ResponsesViewer versionId={versionId} />
         </div>
       )}
     </div>

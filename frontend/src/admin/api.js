@@ -42,3 +42,9 @@ export async function api(path, opts = {}) {
 export async function deleteQuestionnaire(code) {
   return api(`/admin/questionnaires/${encodeURIComponent(code)}`, { method: 'DELETE' });
 }
+
+export async function listUsers({ page = 1, pageSize = 20, q = '' } = {}) {
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  if (q && q.trim()) params.set('q', q.trim());
+  return api(`/admin/users?${params.toString()}`);
+}

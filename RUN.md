@@ -72,6 +72,10 @@ python manage.py add-admin <code>
 - Unified app with a Landing page.
 - Student: default flow (code → credentials → dashboard → primary dynamic questionnaire).
 - Admin: go to `/admin` or toggle “I am admin” in the login screen.
+- Admin UI (frontend) is organized in two modules with a top segmented control:
+	- Questionnaires: card grid without noisy inline actions. Clicking a card opens a dedicated panel for that questionnaire (activate/deactivate, set/unset primary, create version, and list of versions). Editing a version opens the Version Editor in the main area without overlapping other UI.
+	- User control: code-based operations panel. The registered users table is now optional and can be shown/hidden on demand to keep the screen uncluttered.
+- Assigning the primary questionnaire: use the “Designate primary” action (modal picker). If a primary exists, you can also remove it with “Remove primary”.
 - Single session per browser: the “Switch user” button clears `admin_token` and `active_session`.
 
 ---
@@ -96,6 +100,23 @@ Dynamic questionnaires (public)
 - GET `/api/dynamic/my-questionnaires?user_code=...` (user overview)
 
 Note: README lists endpoints briefly; this runbook keeps operational details.
+
+Admin (secured by JWT; cookie refresh)
+- GET `/api/admin/questionnaires` (list with primary flag and version summaries)
+- POST `/api/admin/questionnaires` (create)
+- PATCH `/api/admin/questionnaires/:code` (activate/deactivate)
+- POST `/api/admin/questionnaires/:code/set-primary` (set/unset primary)
+- POST `/api/admin/questionnaires/:code/new-version` (create new draft version)
+- GET `/api/admin/versions/:id` (version details)
+- POST `/api/admin/versions/:id/publish` (publish)
+- PATCH `/api/admin/versions/:id` (partial updates like status)
+- DELETE `/api/admin/versions/:id` (delete draft)
+- POST `/api/admin/versions/:id/clone` (clone to draft)
+- POST `/api/admin/versions/:id/insert-icfes-package` (helper to insert ICFES block)
+- GET `/api/admin/versions/:id/questions` (ordered questions for that version)
+- GET `/api/admin/versions/:id/responses/wide` (pivoted responses; filters + pagination)
+- GET `/api/admin/responses/:response_id` (response detail)
+- GET `/api/admin/users?q=&page=&page_size=` (registered users; search + pagination)
 
 ---
 
