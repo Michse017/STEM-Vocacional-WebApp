@@ -12,6 +12,8 @@ from database.dynamic_models import (
 	QuestionnaireAssignment, Response, ResponseItem
 )
 from database.controller import SessionLocal, get_usuario_by_codigo, create_usuario
+from backend.services import ml_registry
+from backend.services.ml_inference_service import _resolve_path  # internal helper is fine for diagnostics
 from database.models import Usuario
 
 admin_dynamic_bp = Blueprint("admin_dynamic", __name__)
@@ -60,6 +62,7 @@ def _serialize_version(version: QuestionnaireVersion):
 		"id": version.id,
 		"number": version.version_number,
 		"status": version.status,
+		"metadata_json": getattr(version, "metadata_json", None),
 		"assignment_count": assignment_count,
 		"is_latest_published": is_latest_published,
 		"questionnaire": {
@@ -257,6 +260,42 @@ def list_registered_users():
 			})
 		return jsonify({"page": page, "page_size": page_size, "total": int(total), "items": items})
 
+@admin_dynamic_bp.route("/admin/users/<int:id_usuario>", methods=["DELETE"])
+def delete_user(id_usuario: int):
+	"""Eliminar un usuario y TODOS sus datos de cuestionarios (assignments, responses, items).
+
+	Reglas:
+	 - Bloquea si no existe.
+	 - No requiere force: siempre elimina en cascada a nivel aplicación.
+	Respuesta:
+	 { message, deleted: { assignments, responses, items } }
+	"""
+	if not _enabled():
+		return _error("dynamic_disabled", 404)
+	with Session(engine) as s:
+		u = s.get(Usuario, id_usuario)
+		if not u:
+			return _error("user_not_found", 404)
+		codigo = u.codigo_estudiante
+		assignments = s.query(QuestionnaireAssignment).filter(QuestionnaireAssignment.user_code == codigo).all()
+		assignment_ids = [a.id for a in assignments]
+		responses_deleted = 0
+		items_deleted = 0
+		assignments_deleted = 0
+		if assignment_ids:
+			response_ids = [i for (i,) in s.query(Response.id).filter(Response.assignment_id.in_(assignment_ids)).all()]
+			if response_ids:
+				items_deleted = s.query(ResponseItem).filter(ResponseItem.response_id.in_(response_ids)).delete(synchronize_session=False)
+				responses_deleted = s.query(Response).filter(Response.id.in_(response_ids)).delete(synchronize_session=False)
+			assignments_deleted = s.query(QuestionnaireAssignment).filter(QuestionnaireAssignment.id.in_(assignment_ids)).delete(synchronize_session=False)
+		# eliminar usuario al final
+		s.delete(u)
+		s.commit()
+		return jsonify({
+			"message": "user_deleted",
+			"deleted": {"assignments": assignments_deleted, "responses": responses_deleted, "items": items_deleted}
+		})
+
 @admin_dynamic_bp.route("/admin/questionnaires", methods=["POST"])
 def create_questionnaire():
 	if not _enabled():
@@ -417,7 +456,7 @@ def delete_version(version_id: int):
 		if force:
 			if v.status == "published":
 				return _error("cannot_force_delete_published", 409)
-			# delete data for this version
+			# delete data for this version (cascade app-level)
 			assignment_ids = [i for (i,) in s.query(QuestionnaireAssignment.id).filter_by(questionnaire_version_id=v.id).all()]
 			responses_deleted = 0
 			items_deleted = 0
@@ -431,27 +470,19 @@ def delete_version(version_id: int):
 			s.delete(v)
 			s.commit()
 			return jsonify({"message": "version_force_deleted", "deleted": {"assignments": assignments_deleted, "responses": responses_deleted, "items": items_deleted}})
-		# Bloquear si existen respuestas (items) para cualquier pregunta de esta versión
-		try:
-			# Obtener ids de preguntas de la versión
-			q_ids = []
-			for sec in v.sections:
-				q_ids.extend([q.id for q in sec.questions])
-			if q_ids:
-				items_count = s.query(func.count(ResponseItem.id)).filter(ResponseItem.question_id.in_(q_ids)).scalar() or 0
-				if items_count > 0:
-					assign_count = s.query(func.count(QuestionnaireAssignment.id)).filter(QuestionnaireAssignment.questionnaire_version_id == v.id).scalar() or 0
-					return _error("version_has_responses", 409, responses=items_count, assignments=assign_count)
-		except Exception:
-			# Si el chequeo falla, continuamos y dejamos que el DBMS haga respetar integridad
-			pass
-		if v.status == "draft":
-			try:
-				s.delete(v)
-				s.commit()
-			except IntegrityError:
-				s.rollback()
-				return _error("version_has_responses", 409)
+		# Si no es force: permitir borrar si la versión NO está publicada, eliminando sus datos relacionados
+		if v.status in ("draft", "archived"):
+			# eliminar respuestas y asignaciones de esta versión
+			assignment_ids = [i for (i,) in s.query(QuestionnaireAssignment.id).filter_by(questionnaire_version_id=v.id).all()]
+			if assignment_ids:
+				response_ids = [i for (i,) in s.query(Response.id).filter(Response.assignment_id.in_(assignment_ids)).all()]
+				if response_ids:
+					s.query(ResponseItem).filter(ResponseItem.response_id.in_(response_ids)).delete(synchronize_session=False)
+					s.query(Response).filter(Response.id.in_(response_ids)).delete(synchronize_session=False)
+				s.query(QuestionnaireAssignment).filter(QuestionnaireAssignment.id.in_(assignment_ids)).delete(synchronize_session=False)
+			# ahora eliminar la versión
+			s.delete(v)
+			s.commit()
 			return jsonify({"message": "version_deleted"})
 		# Si es publicada: permitir borrar sólo si NO es la última publicada y no tiene asignaciones
 		if v.status == "published":
@@ -573,6 +604,197 @@ def patch_version(version_id: int):
 			s.commit()
 			return jsonify({"message": "archived", "version": {"id": v.id, "status": v.status}})
 	return _error("unsupported_operation", 409)
+
+@admin_dynamic_bp.route("/admin/versions/<int:version_id>/metadata", methods=["PATCH"]) 
+def patch_version_metadata(version_id: int):
+	"""Actualizar metadata_json de la versión (para binding ML u otros metadatos).
+
+	Body: { "metadata_json": { ... } }
+	"""
+	if not _enabled():
+		return _error("dynamic_disabled", 404)
+	payload = request.get_json(force=True, silent=True) or {}
+	metadata = payload.get("metadata_json")
+	if metadata is not None and not isinstance(metadata, dict):
+		return _error("metadata_json_must_be_object")
+	with Session(engine) as s:
+		v = s.get(QuestionnaireVersion, version_id)
+		if not v:
+			return _error("version_not_found", 404)
+		v.metadata_json = metadata
+		s.commit()
+		return jsonify({"message": "metadata_updated", "version": {"id": v.id}})
+
+# --- Admin: ML Models registry (for FeatureBindingWizard) ---
+
+@admin_dynamic_bp.route("/admin/ml/models", methods=["GET"])
+def list_ml_models():
+	if not _enabled():
+		return _error("dynamic_disabled", 404)
+	try:
+		models = ml_registry.list_available_models()
+		return jsonify({"items": models})
+	except Exception as e:
+		current_app.logger.exception("list_ml_models_failed")
+		return _error(str(e), 500)
+
+
+@admin_dynamic_bp.route("/admin/ml/models/<string:model_id>", methods=["GET"])
+def get_ml_model(model_id: str):
+	if not _enabled():
+		return _error("dynamic_disabled", 404)
+	try:
+		cfg = ml_registry.get_model_config(model_id)
+		if not cfg:
+			return _error("model_not_found", 404)
+		return jsonify({"model": cfg})
+	except Exception as e:
+		current_app.logger.exception("get_ml_model_failed")
+		return _error(str(e), 500)
+
+
+@admin_dynamic_bp.route("/admin/versions/<int:version_id>/ml/check", methods=["GET"])
+def check_version_ml_binding(version_id: int):
+	"""Diagnostics for ML binding of a version.
+
+	Returns JSON with:
+	  - binding_present
+	  - artifact_path, resolved_path, artifact_exists
+	  - features_mapped: [{ name, source, type, ok }]
+	  - unmapped: [name]
+	  - unknown_sources: [source]
+	  - feature_order_ok
+	"""
+	if not _enabled():
+		return _error("dynamic_disabled", 404)
+	with Session(engine) as s:
+		v = s.get(QuestionnaireVersion, version_id)
+		if not v:
+			return _error("version_not_found", 404)
+		meta = getattr(v, "metadata_json", None) or {}
+		b = (meta or {}).get("ml_binding") or {}
+		if not b:
+			return jsonify({"binding_present": False})
+
+		artifact_path = b.get("artifact_path") or ""
+		resolved_path = _resolve_path(artifact_path) if artifact_path else None
+		import os
+		artifact_exists = bool(resolved_path and os.path.exists(resolved_path))
+
+		# Build question codes set for this version
+		qcodes = set()
+		for sec in v.sections:
+			for qu in sec.questions:
+				qcodes.add(qu.code)
+
+		feats = []
+		unmapped = []
+		unknown = []
+		feature_order_ok = True
+		order_seen = set()
+		try:
+			inp = b.get("input") or {}
+			specs = inp.get("features") or []
+			for spec in specs:
+				if not isinstance(spec, dict):
+					continue
+				name = spec.get("name")
+				src = spec.get("source")
+				ftype = (spec.get("type") or "number")
+				if not name or not src:
+					feats.append({"name": name or "", "source": src or "", "type": ftype, "ok": False})
+					if not src:
+						unmapped.append(name or "")
+					continue
+				ok = src in qcodes
+				feats.append({"name": name, "source": src, "type": ftype, "ok": ok})
+				if not ok:
+					unknown.append(src)
+			# order check
+			ord_list = (b.get("input") or {}).get("feature_order") or [f.get("name") for f in (inp.get("features") or []) if f.get("name")]
+			if not ord_list or len(set(ord_list)) != len(ord_list):
+				feature_order_ok = False
+			else:
+				names = [f.get("name") for f in (inp.get("features") or []) if f.get("name")]
+				feature_order_ok = set(ord_list) == set(names)
+		except Exception:
+			pass
+
+		return jsonify({
+			"binding_present": True,
+			"artifact_path": artifact_path,
+			"resolved_path": resolved_path,
+			"artifact_exists": artifact_exists,
+			"features_mapped": feats,
+			"unmapped": [u for u in unmapped if u],
+			"unknown_sources": list(sorted(set(unknown))),
+			"feature_order_ok": bool(feature_order_ok),
+		})
+
+@admin_dynamic_bp.route("/admin/versions/<int:version_id>/ml/recompute", methods=["POST"])
+def recompute_version_ml(version_id: int):
+	"""Recalcular el resumen ML para respuestas ya almacenadas de una versión.
+
+	Body opcional:
+	{ "only_finalized": bool, "limit": int, "dry_run": bool }
+
+	Respuesta: { processed, ok, dry_run }
+	"""
+	if not _enabled():
+		return _error("dynamic_disabled", 404)
+	payload = request.get_json(silent=True) or {}
+	only_finalized = bool(payload.get("only_finalized", False))
+	try:
+		limit = int(payload.get("limit")) if payload.get("limit") is not None else None
+	except Exception:
+		limit = None
+	dry_run = bool(payload.get("dry_run", False))
+
+	from sqlalchemy.orm import Session
+	from sqlalchemy import desc
+	from backend.services.ml_inference_service import try_infer_and_store
+
+	with Session(engine) as s:
+		v = s.get(QuestionnaireVersion, version_id)
+		if not v:
+			return _error("version_not_found", 404)
+		# Build code maps
+		qmap_by_code = {}
+		qid_to_code = {}
+		for sec in v.sections:
+			for qu in sec.questions:
+				qmap_by_code[qu.code] = qu
+				qid_to_code[qu.id] = qu.code
+
+		q_assign = s.query(QuestionnaireAssignment).filter_by(questionnaire_version_id=v.id)
+		if only_finalized:
+			q_assign = q_assign.filter_by(status="finalized")
+		assigns = q_assign.order_by(desc(QuestionnaireAssignment.last_activity_at)).all()
+
+		processed = 0
+		updated = 0
+		for a in assigns:
+			if limit and processed >= limit:
+				break
+			processed += 1
+			resp = s.query(Response).filter_by(assignment_id=a.id).order_by(desc(Response.id)).first()
+			if not resp:
+				continue
+			items = s.query(ResponseItem).filter_by(response_id=resp.id).all()
+			answers = {}
+			for it in items:
+				code_key = qid_to_code.get(it.question_id)
+				if not code_key:
+					continue
+				answers[code_key] = _parse_value(it)
+			ml_summary = try_infer_and_store(s, v, resp, answers, qmap_by_code)
+			if isinstance(ml_summary, dict) and ml_summary.get("status") == "ok":
+				updated += 1
+			if not dry_run and (processed % 50 == 0):
+				s.commit()
+		if not dry_run:
+			s.commit()
+		return jsonify({"processed": processed, "ok": updated, "dry_run": dry_run})
 
 @admin_dynamic_bp.route("/admin/versions/<int:version_id>/clone", methods=["POST"])
 def clone_version(version_id: int):
@@ -830,7 +1052,7 @@ def list_responses_wide(version_id: int):
 			for it in items:
 				items_map.setdefault(it.response_id, []).append(it)
 		# Build rows
-		base_cols = ["response_id", "assignment_id", "user_code", "status", "started_at", "submitted_at", "finalized_at", "last_activity_at"]
+		base_cols = ["response_id", "assignment_id", "user_code", "status", "started_at", "submitted_at", "finalized_at", "last_activity_at", "ml_prob", "ml_decision", "ml_label", "ml_status", "ml_reason"]
 		q_codes = [qid_to_code[q.id] for sec in sorted(v.sections, key=lambda ss: ss.order) for q in sorted(sec.questions, key=lambda qq: qq.order)]
 		result_items = []
 		for (resp, assign) in rows:
@@ -844,6 +1066,30 @@ def list_responses_wide(version_id: int):
 				"finalized_at": resp.finalized_at.isoformat() if resp.finalized_at else None,
 				"last_activity_at": assign.last_activity_at.isoformat() if assign.last_activity_at else None,
 			}
+			# Include ML summary columns when available
+			try:
+				sc = getattr(resp, 'summary_cache', None)
+				ml = sc.get('ml') if isinstance(sc, dict) else None
+				if isinstance(ml, dict):
+					prob = ml.get('prob')
+					decision = ml.get('decision')
+					row['ml_prob'] = float(prob) if (prob is not None) else None
+					row['ml_decision'] = bool(decision) if (decision is not None) else None
+					row['ml_label'] = ml.get('label') or None
+					row['ml_status'] = ml.get('status') or None
+					row['ml_reason'] = ml.get('reason') or None
+				else:
+					row['ml_prob'] = None
+					row['ml_decision'] = None
+					row['ml_label'] = None
+					row['ml_status'] = None
+					row['ml_reason'] = None
+			except Exception:
+				row['ml_prob'] = None
+				row['ml_decision'] = None
+				row['ml_label'] = None
+				row['ml_status'] = None
+				row['ml_reason'] = None
 			for it in items_map.get(resp.id, []):
 				code = qid_to_code.get(it.question_id)
 				if code:
@@ -1105,52 +1351,26 @@ def delete_questionnaire(code: str):
 		# forbid deletion if any published version exists
 		if any(v.status == "published" for v in q.versions):
 			return _error("has_published_version", 409)
-		# Force purge path (?force=1): purge all versions' data then delete questionnaire
-		force = str(request.args.get("force", "")).lower() in ("1", "true", "yes")
-		if force:
-			versions = list(q.versions)
-			total_assignments = 0
-			total_responses = 0
-			total_items = 0
-			for v in versions:
-				assignment_ids = [i for (i,) in s.query(QuestionnaireAssignment.id).filter_by(questionnaire_version_id=v.id).all()]
-				if assignment_ids:
-					response_ids = [i for (i,) in s.query(Response.id).filter(Response.assignment_id.in_(assignment_ids)).all()]
-					if response_ids:
-						total_items += s.query(ResponseItem).filter(ResponseItem.response_id.in_(response_ids)).delete(synchronize_session=False)
-						total_responses += s.query(Response).filter(Response.id.in_(response_ids)).delete(synchronize_session=False)
-					total_assignments += s.query(QuestionnaireAssignment).filter(QuestionnaireAssignment.id.in_(assignment_ids)).delete(synchronize_session=False)
-			# delete versions (cascade relationships will remove sections/questions/options)
-			for v in list(q.versions):
-				s.delete(v)
-			s.delete(q)
-			s.commit()
-			return jsonify({"message": "questionnaire_force_deleted", "deleted": {"versions": len(versions), "assignments": total_assignments, "responses": total_responses, "items": total_items}})
-		# Block if any responses exist for any version's questions
-		try:
-			version_ids = [v.id for v in q.versions]
-			items_count = 0
-			if version_ids:
-				items_count = (s.query(func.count(ResponseItem.id))
-								 .join(Question, ResponseItem.question_id == Question.id)
-								 .join(Section, Question.section_id == Section.id)
-								 .filter(Section.questionnaire_version_id.in_(version_ids))
-								 .scalar() or 0)
-			if items_count > 0:
-				assign_count = (s.query(func.count(QuestionnaireAssignment.id))
-								  .filter(QuestionnaireAssignment.questionnaire_version_id.in_(version_ids))
-								  .scalar() or 0)
-				return _error("questionnaire_has_responses", 409, responses=items_count, assignments=assign_count)
-		except Exception:
-			# If check fails, fall back to DB constraint handling
-			pass
-		try:
-			s.delete(q)
-			s.commit()
-		except IntegrityError:
-			s.rollback()
-			return _error("questionnaire_has_responses", 409)
-		return jsonify({"message": "questionnaire_deleted"})
+		# For questionnaires without published versions, allow deletion even if there are responses:
+		# cascade application-level removal of assignments/responses/items for all versions, then delete versions and questionnaire
+		versions = list(q.versions)
+		total_assignments = 0
+		total_responses = 0
+		total_items = 0
+		for v in versions:
+			assignment_ids = [i for (i,) in s.query(QuestionnaireAssignment.id).filter_by(questionnaire_version_id=v.id).all()]
+			if assignment_ids:
+				response_ids = [i for (i,) in s.query(Response.id).filter(Response.assignment_id.in_(assignment_ids)).all()]
+				if response_ids:
+					total_items += s.query(ResponseItem).filter(ResponseItem.response_id.in_(response_ids)).delete(synchronize_session=False)
+					total_responses += s.query(Response).filter(Response.id.in_(response_ids)).delete(synchronize_session=False)
+				total_assignments += s.query(QuestionnaireAssignment).filter(QuestionnaireAssignment.id.in_(assignment_ids)).delete(synchronize_session=False)
+		# delete versions (cascade relationships will remove sections/questions/options)
+		for v in list(q.versions):
+			s.delete(v)
+		s.delete(q)
+		s.commit()
+		return jsonify({"message": "questionnaire_deleted", "deleted": {"versions": len(versions), "assignments": total_assignments, "responses": total_responses, "items": total_items}})
 
 @admin_dynamic_bp.route("/admin/questionnaires/<code>", methods=["PATCH"])
 def patch_questionnaire(code: str):

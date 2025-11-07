@@ -1,3 +1,11 @@
+"""Project management CLI helpers.
+
+This script provides developer-oriented commands to run the backend/frontend,
+seed data, maintain database schemas, manage admin users, and perform ML
+maintenance operations. It is designed to be simple, explicit, and environment-
+driven. All commands are safe to run locally and do not embed secrets.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -8,7 +16,7 @@ from pathlib import Path
 from importlib import import_module
 from shutil import which
 
-# Cargar .env para que los comandos hereden variables
+# Load .env so subprocesses inherit environment variables
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -16,7 +24,8 @@ except Exception:
     pass
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments for the management CLI."""
     parser = argparse.ArgumentParser(description="Project management helper")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -27,7 +36,11 @@ def parse_args():
     p_pub = sub.add_parser("run-public", help="Run public app (app.py)")
     add_common(p_pub)
     # Dynamic questionnaires are always enabled; flag deprecated
-    p_pub.add_argument("--no-dynamic", action="store_true", help="(deprecated) Dynamic questionnaires are always enabled")
+    p_pub.add_argument(
+        "--no-dynamic",
+        action="store_true",
+        help="(deprecated) Dynamic questionnaires are always enabled",
+    )
 
     # Deprecated admin-only launchers (single app now). Use run-admin-ui to only start frontend with admin enabled.
     p_adm_ui = sub.add_parser("run-admin-ui", help="Start only the frontend with admin enabled (backend must be running on 5000)")
@@ -36,15 +49,36 @@ def parse_args():
     p_adm_ui.add_argument("--silent-frontend", action="store_true")
     p_adm_ui.add_argument("--node-cmd", default="npm")
 
-    p_pub_full = sub.add_parser("run-public-full", help="Run public app + frontend (React) concurrently")
+    p_pub_full = sub.add_parser(
+        "run-public-full", help="Run public app + frontend (React) concurrently"
+    )
     add_common(p_pub_full)
     p_pub_full.add_argument("--debug", action="store_true")
-    p_pub_full.add_argument("--frontend-port", type=int, default=3000, help="Port for React dev server (default 3000)")
-    p_pub_full.add_argument("--frontend-path", default="frontend", help="Relative path to frontend folder")
-    p_pub_full.add_argument("--silent-frontend", action="store_true", help="Do not attach frontend output (fire & forget)")
-    p_pub_full.add_argument("--node-cmd", default="npm", help="Frontend start command (npm|yarn|pnpm or path to executable)")
+    p_pub_full.add_argument(
+        "--frontend-port",
+        type=int,
+        default=3000,
+        help="Port for React dev server (default 3000)",
+    )
+    p_pub_full.add_argument(
+        "--frontend-path", default="frontend", help="Relative path to frontend folder"
+    )
+    p_pub_full.add_argument(
+        "--silent-frontend",
+        action="store_true",
+        help="Do not attach frontend output (fire & forget)",
+    )
+    p_pub_full.add_argument(
+        "--node-cmd",
+        default="npm",
+        help="Frontend start command (npm|yarn|pnpm or path to executable)",
+    )
     # Dynamic questionnaires are always enabled; flag deprecated
-    p_pub_full.add_argument("--no-dynamic", action="store_true", help="(deprecated) Dynamic questionnaires are always enabled")
+    p_pub_full.add_argument(
+        "--no-dynamic",
+        action="store_true",
+        help="(deprecated) Dynamic questionnaires are always enabled",
+    )
 
     sub.add_parser("seed-dynamic", help="Seed legacy questionnaire into dynamic tables")
 
@@ -60,23 +94,43 @@ def parse_args():
     # DB maintenance: ensure auth columns on usuarios
     sub.add_parser("ensure-user-schema", help="Ensure usuarios has username/password_hash/timestamps and remove legacy fields")
 
+    # Maintenance: recompute ML summaries for existing responses
+    p_reml = sub.add_parser("recompute-ml", help="Recompute ML summary for stored responses using current version binding")
+    grp = p_reml.add_mutually_exclusive_group(required=True)
+    grp.add_argument("--version-id", type=int, help="Target QuestionnaireVersion ID")
+    grp.add_argument("--code", help="Questionnaire code (uses latest published version)")
+    p_reml.add_argument("--only-finalized", action="store_true", help="Process only assignments marked as finalized")
+    p_reml.add_argument("--limit", type=int, help="Max number of assignments to process")
+    p_reml.add_argument("--dry-run", action="store_true", help="Compute without saving (prints a summary)")
+
     return parser.parse_args()
 
 
-def set_flag(enabled: bool):
-    # No-op: dynamic questionnaires are always enabled
-    pass
+def set_flag(enabled: bool) -> None:
+    """Set feature flags (no-op).
+
+    Dynamic questionnaires are always enabled. This function exists to keep
+    compatibility with older scripts that toggled a flag.
+    """
+    # Intentionally a no-op
+    return None
 
 
-def run_public(host: str, port: int | None, dynamic: bool):
+def run_public(host: str, port: int | None, dynamic: bool) -> None:
+    """Run the public Flask backend only (no frontend)."""
     set_flag(True)
     # Use legacy root app entrypoint
     from app import create_app  # type: ignore
+
     app = create_app()
     app.run(host=host, port=port or 5000, debug=False)
 
 
-def run_admin_ui(frontend_port: int, frontend_path: str, silent: bool, node_cmd: str):
+def run_admin_ui(frontend_port: int, frontend_path: str, silent: bool, node_cmd: str) -> None:
+    """Run only the React frontend with the Admin UI enabled.
+
+    The backend must already be running and reachable on port 5000.
+    """
     env = os.environ.copy()
     env.setdefault("REACT_APP_ENABLE_ADMIN", "1")
     env.setdefault("REACT_APP_ADMIN_API_BASE", f"http://127.0.0.1:5000/api")
@@ -101,8 +155,10 @@ def run_admin_ui(frontend_port: int, frontend_path: str, silent: bool, node_cmd:
 
 def _resolve_frontend_command(cmd: str) -> list[str]:
     """Resolve a frontend start command.
-    Accepts npm|yarn|pnpm or an absolute/relative path. Returns argv list.
-    On Windows with npm in PATH, 'npm' should resolve. If not found, raises.
+
+    Accepts "npm"|"yarn"|"pnpm" or an absolute/relative path. Returns an argv
+    list. On Windows with npm in PATH, "npm" should resolve; otherwise a helpful
+    error is raised.
     """
     base = cmd.strip()
     # Allow passing full command with args e.g. "npm run start"; split manually
@@ -152,14 +208,21 @@ def _resolve_frontend_command(cmd: str) -> list[str]:
     return parts
 
 
-    # Removed run-admin-full (single app). Use run-public to start backend and run-admin-ui for frontend only.
+def run_public_full(
+    host: str,
+    port: int | None,
+    dynamic: bool,
+    debug: bool,
+    frontend_port: int,
+    frontend_path: str,
+    silent: bool,
+    node_cmd: str,
+) -> None:
+    """Start backend, wait for health, then start the React dev server.
 
-
-def run_public_full(host: str, port: int | None, dynamic: bool, debug: bool, frontend_port: int, frontend_path: str, silent: bool, node_cmd: str):
-    """Start backend first, wait until healthy, then start the React dev server.
-    - Ensures API is up before frontend opens the browser.
-    - Admin UI disabled in frontend.
-    - Dynamic questionnaires enabled by default unless --no-dynamic.
+    - Ensures the API is up before the frontend starts.
+    - Admin UI is enabled in the frontend.
+    - Dynamic questionnaires are enabled by default.
     """
     set_flag(True)
     # 1) Start backend in a child process
@@ -193,7 +256,7 @@ def run_public_full(host: str, port: int | None, dynamic: bool, debug: bool, fro
 
     # 3) Start frontend
     env = os.environ.copy()
-    # App unificada: habilitar Admin UI por defecto
+    # Unified app: enable Admin UI by default
     env.setdefault("REACT_APP_ENABLE_ADMIN", "1")
     env.setdefault("PORT", str(frontend_port))
     front_dir = Path(frontend_path).resolve()
@@ -222,7 +285,8 @@ def run_public_full(host: str, port: int | None, dynamic: bool, debug: bool, fro
         pass
 
 
-def add_admin(codigo: str, password: str | None):
+def add_admin(codigo: str, password: str | None) -> int | None:
+    """Create or update an admin user (interactive if password omitted)."""
     from getpass import getpass
     from database.controller import SessionLocal
     from database.models import AdminUser
@@ -248,7 +312,8 @@ def add_admin(codigo: str, password: str | None):
         print(f"Admin '{codigo}' {action} (id={user.id}).")
 
 
-def list_admins():
+def list_admins() -> None:
+    """List admin users (id, code, active)."""
     from database.controller import SessionLocal
     from database.models import AdminUser
     with SessionLocal() as db:
@@ -261,9 +326,11 @@ def list_admins():
                 print(f" - id={r.id}, codigo={r.codigo}, active={r.is_active}")
 
 
-def drop_legacy_finalizado():
-    """Drop usuarios.finalizado column (legacy) on SQL Server, handling default constraint.
-    Safe to run multiple times. Requires DB permissions to alter table.
+def drop_legacy_finalizado() -> int:
+    """Drop usuarios.finalizado column (legacy) on SQL Server.
+
+    Handles default constraints, is idempotent, and requires permissions to
+    alter the table.
     """
     from sqlalchemy import text
     from database.controller import engine
@@ -300,7 +367,106 @@ def drop_legacy_finalizado():
         return 2
 
 
-def main():
+def recompute_ml(
+    version_id: int | None,
+    code: str | None,
+    only_finalized: bool,
+    limit: int | None,
+    dry_run: bool,
+) -> int:
+    """Re-evaluate ML for existing responses and store summary_cache['ml'].
+
+    Selection rules:
+    - If ``version_id`` is provided, target that version.
+    - Else if ``code`` is provided, use the latest published version.
+    - ``only_finalized`` limits to finalized assignments.
+    - ``limit`` processes at most N assignments.
+    - ``dry_run`` computes but does not persist changes.
+    """
+    from sqlalchemy.orm import Session
+    from sqlalchemy import desc
+    from database.controller import engine
+    from database.dynamic_models import (
+        Questionnaire, QuestionnaireVersion, Section, Question, Option,
+        QuestionnaireAssignment, Response, ResponseItem
+    )
+    from backend.services.ml_inference_service import try_infer_and_store
+
+    def _parse_value(item: ResponseItem):
+        if item.numeric_value is not None:
+            return item.numeric_value
+        if item.value is None:
+            return None
+        if item.value in ("true", "false"):
+            return item.value == "true"
+        if "," in item.value and item.value.count(",") >= 1:
+            return [v for v in item.value.split(",") if v]
+        return item.value
+
+    with Session(engine) as s:
+        # Resolve target version
+        version: QuestionnaireVersion | None = None
+        if version_id:
+            version = s.get(QuestionnaireVersion, int(version_id))
+        elif code:
+            q = s.query(Questionnaire).filter_by(code=code).first()
+            if not q:
+                print(f"[recompute-ml] Questionnaire not found for code='{code}'", file=sys.stderr)
+                return 2
+            versions_sorted = sorted(q.versions, key=lambda v: v.version_number, reverse=True)
+            version = next((v for v in versions_sorted if v.status == "published"), versions_sorted[0] if versions_sorted else None)
+        if not version:
+            print("[recompute-ml] Target version not found", file=sys.stderr)
+            return 2
+
+        # Build code->question map once
+        qmap_by_code = {}
+        qid_to_code = {}
+        for sec in version.sections:
+            for qu in sec.questions:
+                qmap_by_code[qu.code] = qu
+                qid_to_code[qu.id] = qu.code
+
+        # Query assignments for this version
+        q_assign = s.query(QuestionnaireAssignment).filter_by(questionnaire_version_id=version.id)
+        if only_finalized:
+            q_assign = q_assign.filter_by(status="finalized")
+        assigns = q_assign.order_by(desc(QuestionnaireAssignment.last_activity_at)).all()
+        total = len(assigns)
+        print(f"[recompute-ml] Version id={version.id} (#{version.version_number}) — assignments: {total} (only_finalized={only_finalized})")
+        processed = 0
+        updated = 0
+        for a in assigns:
+            if limit and processed >= limit:
+                break
+            processed += 1
+            resp = s.query(Response).filter_by(assignment_id=a.id).order_by(desc(Response.id)).first()
+            if not resp:
+                continue
+            # Build answers from items
+            items = s.query(ResponseItem).filter_by(response_id=resp.id).all()
+            answers = {}
+            for it in items:
+                code_key = qid_to_code.get(it.question_id)
+                if not code_key:
+                    continue
+                answers[code_key] = _parse_value(it)
+            # Run ML
+            ml_summary = try_infer_and_store(s, version, resp, answers, qmap_by_code)
+            if isinstance(ml_summary, dict) and not dry_run:
+                s.add(resp)
+            if not dry_run and (processed % 50 == 0):
+                s.commit()
+            if isinstance(ml_summary, dict) and ml_summary.get("status") == "ok":
+                updated += 1
+        if not dry_run:
+            s.commit()
+        print(f"[recompute-ml] Done. processed={processed}, ok={updated}, dry_run={dry_run}")
+    return 0
+
+
+def main() -> int:
+    """Main entrypoint for the management CLI."""
     args = parse_args()
     if args.command == "run-public":
         run_public(args.host, args.port, not args.no_dynamic)
@@ -320,6 +486,8 @@ def main():
         from database.models import ensure_user_schema
         ensure_user_schema(engine)
         print("ensure_user_schema executed.")
+    elif args.command == "recompute-ml":
+        return recompute_ml(getattr(args, "version_id", None), getattr(args, "code", None), bool(getattr(args, "only_finalized", False)), getattr(args, "limit", None), bool(getattr(args, "dry_run", False)))
     else:
         print("Unknown command")
         return 1

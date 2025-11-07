@@ -1,21 +1,33 @@
 import React, { useEffect, useState } from 'react';
-import { api } from '../api';
+import { api, patchVersionMetadata } from '../api';
 import { SectionBlock } from './SectionBlock';
 import { ResponsesViewer } from './ResponsesViewer';
+import FeatureBindingWizard from './FeatureBindingWizard';
 
 export function VersionEditor({ versionId, onClose, onRefreshList }) {
   const [version, setVersion] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [view, setView] = useState('structure'); // 'structure' | 'responses'
+  const [view, setView] = useState('structure'); // 'structure' | 'responses' | 'metadata'
   const [addingSec, setAddingSec] = useState(false);
   const [newSec, setNewSec] = useState({ title: '', description: '' });
+  const [metaText, setMetaText] = useState('');
+  const [metaDirty, setMetaDirty] = useState(false);
+  const [showWizard, setShowWizard] = useState(false); // legacy; wizard is always visible now
   // reserved for future inline create pattern (removed unused state to satisfy lint)
 
   const load = async () => {
     setLoading(true); setError(null);
-    try { const d = await api(`/admin/versions/${versionId}`); setVersion(d.version); }
+    try {
+      const d = await api(`/admin/versions/${versionId}`);
+      setVersion(d.version);
+      // prepare metadata editor text
+      const meta = d?.version?.metadata_json ?? null;
+      const pretty = meta ? JSON.stringify(meta, null, 2) : '{\n  "ml_binding": {\n    \n  }\n}';
+      setMetaText(pretty);
+      setMetaDirty(false);
+    }
     catch (e) { setError(e.message); }
     finally { setLoading(false); }
   };
@@ -99,6 +111,29 @@ export function VersionEditor({ versionId, onClose, onRefreshList }) {
     finally { setBusy(false); }
   };
 
+  // --- Metadata & ML binding ---
+  const saveMetadata = async () => {
+    let parsed = null;
+    try {
+      parsed = metaText && metaText.trim() ? JSON.parse(metaText) : {};
+    } catch (e) {
+      alert('JSON inválido en metadata. Revisa el formato.');
+      return;
+    }
+    try {
+      setBusy(true);
+      await patchVersionMetadata(versionId, parsed);
+      await load();
+      setMetaDirty(false);
+    } catch (e) {
+      alert(e.message || 'No se pudo guardar metadata');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Removed template/auto-generation: mapping is model-first in the wizard
+
   const addSection = async (e) => {
     e?.preventDefault?.();
     if (!newSec.title.trim()) { alert('El título de la sección es obligatorio.'); return; }
@@ -175,7 +210,8 @@ export function VersionEditor({ versionId, onClose, onRefreshList }) {
         <div style={{ display: 'flex', gap: 6, flexWrap:'wrap', alignItems:'center' }}>
           <div style={{ display:'inline-flex', border:'1px solid #e2e8f0', borderRadius: 6, overflow:'hidden', marginRight: 8 }}>
             <button className={'btn btn-secondary btn-sm'+(view==='structure'?' active':'')} onClick={()=>setView('structure')} disabled={busy} style={{ border:'none', borderRight:'1px solid #e2e8f0' }}>Estructura</button>
-            <button className={'btn btn-secondary btn-sm'+(view==='responses'?' active':'')} onClick={()=>setView('responses')} disabled={busy} style={{ border:'none' }}>Respuestas</button>
+            <button className={'btn btn-secondary btn-sm'+(view==='responses'?' active':'')} onClick={()=>setView('responses')} disabled={busy} style={{ border:'none', borderRight:'1px solid #e2e8f0' }}>Respuestas</button>
+            <button className={'btn btn-secondary btn-sm'+(view==='metadata'?' active':'')} onClick={()=>setView('metadata')} disabled={busy} style={{ border:'none' }}>ML / Metadata</button>
           </div>
           <button className='btn btn-secondary btn-sm' onClick={toggleQuestionnaireStatus} disabled={busy}>
             {version?.questionnaire?.status === 'active' ? 'Desactivar cuestionario' : 'Activar cuestionario'}
@@ -254,6 +290,27 @@ export function VersionEditor({ versionId, onClose, onRefreshList }) {
       {version && view === 'responses' && (
         <div style={{ display:'grid', gap: 16 }}>
           <ResponsesViewer versionId={versionId} />
+        </div>
+      )}
+      {version && view === 'metadata' && (
+        <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ color: '#4a5568', fontSize: 12 }}>
+            Edita <code>metadata_json</code> de esta versión. Aquí puedes definir el <strong>binding ML</strong> (v1 o v2). Guarda para aplicar.
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className='btn btn-primary btn-sm' type='button' onClick={saveMetadata} disabled={busy || !metaText}>{metaDirty ? 'Guardar cambios' : 'Guardar'}</button>
+          </div>
+          <FeatureBindingWizard
+            version={version}
+            metaText={metaText}
+            onApply={(obj)=>{ setMetaText(JSON.stringify(obj, null, 2)); setMetaDirty(true); }}
+          />
+          <textarea
+            rows={20}
+            style={{ width: '100%', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}
+            value={metaText}
+            onChange={e => { setMetaText(e.target.value); setMetaDirty(true); }}
+          />
         </div>
       )}
     </div>

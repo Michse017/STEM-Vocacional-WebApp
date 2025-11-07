@@ -15,7 +15,27 @@ export function QuestionBlock({ question, isDraft, canMoveUp, canMoveDown, onMov
     'Sexo','Nivel educativo','Ocupación','Condición de discapacidad','Grupo étnico','Verdadero / Falso'
   ].includes(question.text) || ['template_sexo','template_nivel_educativo','template_ocupacion','template_discapacidad','template_grupo_etnico','template_boolean_vf'].some(k => (question.code||'').includes(k));
 
-  const save = async () => { try { setSaving(true); await onPatch(question.id, editVals); setEditing(false); } finally { setSaving(false); } };
+  const save = async () => {
+    try {
+      setSaving(true);
+      // Sanear números en validation_rules (min, max, step)
+      const v = JSON.parse(JSON.stringify(editVals || {}));
+      if (v && v.validation_rules) {
+        const nr = v.validation_rules;
+        const toNum = (x) => {
+          if (x === '' || x === undefined || x === null) return undefined;
+          if (typeof x === 'number') return x;
+          const n = parseFloat(String(x).replace(',', '.'));
+          return Number.isFinite(n) ? n : undefined;
+        };
+        if (Object.prototype.hasOwnProperty.call(nr, 'min')) nr.min = toNum(nr.min);
+        if (Object.prototype.hasOwnProperty.call(nr, 'max')) nr.max = toNum(nr.max);
+        if (Object.prototype.hasOwnProperty.call(nr, 'step')) nr.step = toNum(nr.step);
+      }
+      await onPatch(question.id, v);
+      setEditing(false);
+    } finally { setSaving(false); }
+  };
   const addOption = (e) => {
     e.preventDefault();
     if (!newOpt.value.trim() || !newOpt.label.trim()) return;
@@ -73,7 +93,7 @@ export function QuestionBlock({ question, isDraft, canMoveUp, canMoveDown, onMov
       {!collapsed && (editing ? (
         <div style={{ marginTop: 6, display: 'grid', gap: 6 }}>
           <textarea rows={2} value={editVals.text} onChange={e => setEditVals(v => ({ ...v, text: e.target.value }))} />
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <select value={editVals.type} disabled={isTemplateTypeLocked || busy} onChange={e => setEditVals(v => ({ ...v, type: e.target.value }))}>
               <option value='text'>Texto</option>
               <option value='textarea'>Texto largo</option>
@@ -90,6 +110,52 @@ export function QuestionBlock({ question, isDraft, canMoveUp, canMoveDown, onMov
             </label>
             <Btn onClick={save} disabled={saving || busy}>{saving ? 'Guardando…' : 'Guardar'}</Btn>
           </div>
+          {editVals.type === 'number' && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', padding: 8, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6 }}>
+              <span style={{ fontSize: 12, color: '#475569' }}>Validación numérica</span>
+              <label style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
+                Min:
+                <input
+                  type='text'
+                  placeholder='ej. 0'
+                  value={editVals.validation_rules?.min ?? ''}
+                  onChange={e => setEditVals(v => ({ ...v, validation_rules: { ...(v.validation_rules||{}), min: e.target.value === '' ? undefined : Number(e.target.value) } }))}
+                  style={{ width: 80 }}
+                />
+              </label>
+              <label style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
+                Max:
+                <input
+                  type='text'
+                  placeholder='ej. 5'
+                  value={editVals.validation_rules?.max ?? ''}
+                  onChange={e => setEditVals(v => ({ ...v, validation_rules: { ...(v.validation_rules||{}), max: e.target.value === '' ? undefined : Number(e.target.value) } }))}
+                  style={{ width: 80 }}
+                />
+              </label>
+              <label style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input
+                  type='checkbox'
+                  checked={!!editVals.validation_rules?.allow_decimal}
+                  onChange={e => setEditVals(v => ({ ...v, validation_rules: { ...(v.validation_rules||{}), allow_decimal: e.target.checked } }))}
+                />
+                Permitir decimales
+              </label>
+              <label style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
+                Step:
+                <input
+                  type='text'
+                  placeholder='ej. 0.1'
+                  value={editVals.validation_rules?.step ?? ''}
+                  onChange={e => setEditVals(v => ({ ...v, validation_rules: { ...(v.validation_rules||{}), step: e.target.value === '' ? undefined : e.target.value } }))}
+                  style={{ width: 80 }}
+                />
+              </label>
+              <div style={{ fontSize: 11, color: '#64748b' }}>
+                Ejemplos: Promedio 0–5 con decimales (min 0, max 5, decimales ON, step 0.1) · Estrato 1–6 entero (min 1, max 6, decimales OFF)
+              </div>
+            </div>
+          )}
           {/* Advanced editors ocultos temporalmente para simplificar la edición */}
         </div>
       ) : (

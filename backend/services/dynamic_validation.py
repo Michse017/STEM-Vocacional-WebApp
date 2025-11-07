@@ -54,6 +54,16 @@ def coerce_int(val):
         return None, "not_integer"
 
 
+def coerce_float(val):
+    try:
+        # Accept ints and floats; reject empty strings
+        if val is None or (isinstance(val, str) and val.strip() == ""):
+            return None, "empty"
+        return float(val), None
+    except Exception:
+        return None, "not_number"
+
+
 def coerce_date(val):
     if not val:
         return None, "empty"
@@ -141,25 +151,72 @@ def validate_answers(version, answers: Dict[str, Any]) -> Tuple[bool, Dict[str, 
             else:
                 normalized[code] = sval
         elif qtype == "number":
-            val, err = coerce_int(raw)
-            if err:
-                errors[code] = err
-            else:
-                # numeric range via rules
-                try:
-                    min_v = int(rules.get("min")) if rules and "min" in rules else None
-                except Exception:
-                    min_v = None
-                try:
-                    max_v = int(rules.get("max")) if rules and "max" in rules else None
-                except Exception:
-                    max_v = None
-                if min_v is not None and val < min_v:
-                    errors[code] = "below_min"
-                elif max_v is not None and val > max_v:
-                    errors[code] = "above_max"
+            # Allow decimals via validation_rules.allow_decimal
+            allow_decimal = False
+            try:
+                if isinstance(rules, dict) and rules.get("allow_decimal"):
+                    allow_decimal = True
+            except Exception:
+                allow_decimal = False
+            if allow_decimal:
+                val, err = coerce_float(raw)
+                if err:
+                    errors[code] = err
                 else:
-                    normalized[code] = val
+                    # min/max may be float
+                    try:
+                        min_v = float(rules.get("min")) if rules and "min" in rules else None
+                    except Exception:
+                        min_v = None
+                    try:
+                        max_v = float(rules.get("max")) if rules and "max" in rules else None
+                    except Exception:
+                        max_v = None
+                    if min_v is not None and val < min_v:
+                        errors[code] = "below_min"
+                    elif max_v is not None and val > max_v:
+                        errors[code] = "above_max"
+                    else:
+                        # optional step validation for decimals (relative to min or 0)
+                        step_ok = True
+                        try:
+                            step_raw = rules.get("step") if isinstance(rules, dict) else None
+                            step = float(step_raw) if step_raw is not None and str(step_raw).strip() != "" else None
+                        except Exception:
+                            step = None
+                        if step is not None and step > 0:
+                            base = min_v if (min_v is not None) else 0.0
+                            # avoid FP issues with a tolerance
+                            diff = abs(val - base)
+                            rem = diff % step
+                            tol = 1e-9
+                            if not (rem < tol or abs(rem - step) < tol):
+                                step_ok = False
+                        if not step_ok:
+                            errors[code] = "invalid_step"
+                        else:
+                            # Note: DB numeric_value es entero; para decimales se almacena como string en value
+                            normalized[code] = val
+            else:
+                val, err = coerce_int(raw)
+                if err:
+                    errors[code] = err
+                else:
+                    # numeric range via rules (int)
+                    try:
+                        min_v = int(rules.get("min")) if rules and "min" in rules else None
+                    except Exception:
+                        min_v = None
+                    try:
+                        max_v = int(rules.get("max")) if rules and "max" in rules else None
+                    except Exception:
+                        max_v = None
+                    if min_v is not None and val < min_v:
+                        errors[code] = "below_min"
+                    elif max_v is not None and val > max_v:
+                        errors[code] = "above_max"
+                    else:
+                        normalized[code] = val
         elif qtype == "scale_1_5":
             val, err = coerce_int(raw)
             if err:

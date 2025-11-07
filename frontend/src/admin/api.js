@@ -48,3 +48,33 @@ export async function listUsers({ page = 1, pageSize = 20, q = '' } = {}) {
   if (q && q.trim()) params.set('q', q.trim());
   return api(`/admin/users?${params.toString()}`);
 }
+
+export async function deleteUser(idUsuario) {
+  return api(`/admin/users/${encodeURIComponent(idUsuario)}`, { method: 'DELETE' });
+}
+
+export async function patchVersionMetadata(versionId, metadata) {
+  return api(`/admin/versions/${encodeURIComponent(versionId)}/metadata`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ metadata_json: metadata ?? {} })
+  });
+}
+
+export async function listMlModels() {
+  return api(`/admin/ml/models`);
+}
+
+export async function getMlModel(modelId) {
+  return api(`/admin/ml/models/${encodeURIComponent(modelId)}`);
+}
+
+export async function recomputeVersionMl(versionId, { onlyFinalized = true, limit = null, dryRun = false } = {}) {
+  const body = { only_finalized: !!onlyFinalized, dry_run: !!dryRun };
+  if (typeof limit === 'number' && Number.isFinite(limit)) body.limit = limit;
+  return api(`/admin/versions/${encodeURIComponent(versionId)}/ml/recompute`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+}

@@ -55,8 +55,12 @@ export function QuestionnaireList({ onSelectVersion, refreshSignal, onError, onI
     catch (e) { onError?.(e.message); }
   };
 
-  const removeQuestionnaire = async (code) => {
-    if (!window.confirm(`Eliminar cuestionario "${code}"?\nNota: Debes borrar o despublicar todas las versiones primero.`)) return;
+  const removeQuestionnaire = async (code, hasPublished) => {
+    if (hasPublished) {
+      onError?.('No puedes eliminar: tiene al menos una versión publicada');
+      return;
+    }
+    if (!window.confirm(`Eliminar cuestionario "${code}"?\nSe eliminarán en cascada sus borradores/archivados y todos los datos asociados (asignaciones/respuestas).`)) return;
     try {
       await deleteQuestionnaire(code);
       await load();
@@ -107,7 +111,17 @@ export function QuestionnaireList({ onSelectVersion, refreshSignal, onError, onI
                 ) : (
                   <button className='btn btn-secondary btn-sm' onClick={() => setPrimary(q.code, false)} title='Quitar principal'>Quitar principal</button>
                 )}
-                <button className='btn btn-danger btn-sm' onClick={() => removeQuestionnaire(q.code)} title='Eliminar cuestionario'>Eliminar</button>
+                {(() => {
+                  const hasPublished = (q.versions || []).some(v => v.state === 'published');
+                  return (
+                    <button
+                      className='btn btn-danger btn-sm'
+                      onClick={() => removeQuestionnaire(q.code, hasPublished)}
+                      title={hasPublished ? 'No se puede eliminar: hay versiones publicadas' : 'Eliminar cuestionario'}
+                      disabled={hasPublished}
+                    >Eliminar</button>
+                  );
+                })()}
               </div>
             </div>
             {openCodes[q.code] && q.versions?.length > 0 && (

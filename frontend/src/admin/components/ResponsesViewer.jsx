@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { api } from '../api';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { api, recomputeVersionMl } from '../api';
 
 export function ResponsesViewer({ versionId }) {
   const [loading, setLoading] = useState(false);
@@ -9,9 +9,12 @@ export function ResponsesViewer({ versionId }) {
   const [status, setStatus] = useState('');
   const [userCode, setUserCode] = useState('');
   const [columns, setColumns] = useState([]); // question codes in order
-  const [baseColumns, setBaseColumns] = useState(["response_id","assignment_id","user_code","status","started_at","submitted_at","finalized_at","last_activity_at"]);
+  const [baseColumns, setBaseColumns] = useState(["response_id","assignment_id","user_code","status","started_at","submitted_at","finalized_at","last_activity_at","ml_prob","ml_decision","ml_label","ml_status","ml_reason"]);
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
+  const [recLoading, setRecLoading] = useState(false);
+  const [recOnlyFinalized, setRecOnlyFinalized] = useState(false);
+  const [recLimit, setRecLimit] = useState('');
 
   // Load question list for the version
   useEffect(() => {
@@ -32,7 +35,7 @@ export function ResponsesViewer({ versionId }) {
   }, [versionId]);
 
   // Load rows with filters
-  const load = async (nextPage = page) => {
+  const load = useCallback(async (nextPage = 1) => {
     setLoading(true); setError(null);
     try {
       const params = new URLSearchParams();
@@ -42,8 +45,8 @@ export function ResponsesViewer({ versionId }) {
       if (status) params.set('status', status);
       const d = await api(`/admin/versions/${versionId}/responses/wide?` + params.toString());
       setRows(d?.items || []);
-      setBaseColumns(d?.base_columns || baseColumns);
-      setColumns(d?.question_codes || columns);
+      setBaseColumns(d?.base_columns || []);
+      setColumns(d?.question_codes || []);
       setTotal(d?.total || 0);
       setPage(nextPage);
     } catch (e) {
@@ -51,13 +54,33 @@ export function ResponsesViewer({ versionId }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [versionId, pageSize, status, userCode]);
 
-  useEffect(() => { if (versionId) load(1); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [versionId, pageSize, status]);
+  useEffect(() => { if (versionId) load(1); }, [versionId, pageSize, status, load]);
 
   const allColumns = useMemo(() => [...baseColumns, ...columns], [baseColumns, columns]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const triggerRecompute = async (dryRun = false) => {
+    if (!versionId) return;
+    const limitNum = recLimit.trim() ? parseInt(recLimit.trim(), 10) : undefined;
+    const msg = dryRun
+      ? `¿Simular recomputo ML para la versión ${versionId}?\nSolo finalizados: ${recOnlyFinalized ? 'sí' : 'no'}${limitNum ? `\nLímite: ${limitNum}` : ''}`
+      : `¿Recomputar ML para la versión ${versionId}?\nSolo finalizados: ${recOnlyFinalized ? 'sí' : 'no'}${limitNum ? `\nLímite: ${limitNum}` : ''}`;
+    if (!window.confirm(msg)) return;
+    setRecLoading(true);
+    try {
+      const res = await recomputeVersionMl(versionId, { onlyFinalized: recOnlyFinalized, limit: Number.isFinite(limitNum) ? limitNum : null, dryRun });
+      const p = res?.processed ?? 0; const ok = res?.ok ?? 0;
+      alert(`${dryRun ? 'Simulado' : 'Listo'}: procesados=${p}, ok=${ok}${res?.dry_run ? ' (dry-run)' : ''}`);
+      if (!dryRun) await load(1);
+    } catch (e) {
+      alert(`Error: ${e.message || e}`);
+    } finally {
+      setRecLoading(false);
+    }
+  };
 
   return (
     <div style={{ display:'grid', gap: 8 }}>
@@ -78,6 +101,13 @@ export function ResponsesViewer({ versionId }) {
             <option value={100}>100</option>
           </select>
           <button className='btn btn-secondary btn-sm' onClick={() => load(1)} disabled={loading}>Aplicar</button>
+          <div style={{ width:1, height:22, background:'#e2e8f0' }} />
+          <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
+            <input type='checkbox' checked={recOnlyFinalized} onChange={e => setRecOnlyFinalized(e.target.checked)} /> Sólo finalizados
+          </label>
+          <input className='form-control' style={{ width:100 }} placeholder='Límite' value={recLimit} onChange={e => setRecLimit(e.target.value)} />
+          <button className='btn btn-warning btn-sm' onClick={() => triggerRecompute(true)} disabled={recLoading}>Simular ML</button>
+          <button className='btn btn-primary btn-sm' onClick={() => triggerRecompute(false)} disabled={recLoading}>Recomputar ML</button>
         </div>
       </div>
       {error && <div style={{ color:'crimson' }}>Error: {String(error)}</div>}
@@ -103,7 +133,9 @@ export function ResponsesViewer({ versionId }) {
                       {(() => {
                         const v = r[c];
                         if (Array.isArray(v)) return v.join(', ');
-                        return v === undefined ? '' : String(v);
+                        if (c === 'ml_prob' && typeof v === 'number') return (v*100).toFixed(1)+'%';
+                        if (c === 'ml_decision') return v === true ? 'true' : (v === false ? 'false' : '');
+                        return v === undefined || v === null ? '' : String(v);
                       })()}
                     </td>
                   ))}

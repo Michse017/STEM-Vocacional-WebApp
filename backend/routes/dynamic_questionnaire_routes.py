@@ -13,6 +13,7 @@ from backend.services.dynamic_validation import validate_answers
 from database.controller import get_usuario_by_codigo
 from sqlalchemy import desc
 from sqlalchemy.sql import func
+from backend.services.ml_inference_service import try_infer_and_store
 
 dynamic_questionnaire_bp = Blueprint("dynamic_questionnaire", __name__)
 
@@ -278,9 +279,17 @@ def get_my_dynamic_status(code: str):
 				if not code_key:
 					continue
 				answers[code_key] = _parse_value(it)
+		# include persisted ML summary (if any) so the student can always see their report in read-only mode
+		ml_payload = None
+		if resp and isinstance(getattr(resp, "summary_cache", None), dict):
+			try:
+				ml_payload = resp.summary_cache.get("ml")
+			except Exception:
+				ml_payload = None
 		return jsonify({
 			"status": assign.status,
-			"answers": answers
+			"answers": answers,
+			"ml": ml_payload
 		})
 
 @dynamic_questionnaire_bp.route("/dynamic/questionnaires/<code>/save", methods=["POST"])
@@ -392,11 +401,19 @@ def finalize_response(code: str):
 			s.add(resp)
 			s.flush()
 		_upsert_items(s, resp.id, question_map, normalized)
+		# Attempt ML inference (safe no-op if no binding/config)
+		ml_summary = try_infer_and_store(s, target_version, resp, normalized, question_map)
 		assign.status = "finalized"
 		resp.finalized_at = func.now()
 		resp.submitted_at = func.now()
 		s.commit()
-		return jsonify({"message": "finalized", "assignment_id": assign.id, "response_id": resp.id})
+		# Include ml summary in response payload when available
+		payload = {"message": "finalized", "assignment_id": assign.id, "response_id": resp.id}
+		if isinstance(getattr(resp, "summary_cache", None), dict) and resp.summary_cache.get("ml"):
+			payload["ml"] = resp.summary_cache.get("ml")
+		else:
+			payload["ml"] = ml_summary if isinstance(ml_summary, dict) else None
+		return jsonify(payload)
 
 # --- Helpers ---
 
@@ -423,6 +440,7 @@ def _serialize_version(version: QuestionnaireVersion):
 						"code": qu.code,
 						"text": qu.text,
 						"type": qu.type,
+						"validation_rules": getattr(qu, "validation_rules", None),
 						"visible_if": getattr(qu, "visible_if", None),
 						"required": qu.required,
 						"order": qu.order,

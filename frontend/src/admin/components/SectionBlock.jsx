@@ -39,6 +39,20 @@ export function SectionBlock({ section, isDraft, busy=false, canMoveUp, canMoveD
     if (payload.type === 'dob_14') {
       payload = { ...payload, type: 'date', validation_rules: { min_age_years: 14 } };
     }
+    // Sanear validation_rules numéricos (min, max, step) antes de enviar
+    if (payload.validation_rules) {
+      const nr = { ...payload.validation_rules };
+      const toNum = (x) => {
+        if (x === '' || x === undefined || x === null) return undefined;
+        if (typeof x === 'number') return x;
+        const n = parseFloat(String(x).replace(',', '.'));
+        return Number.isFinite(n) ? n : undefined;
+      };
+      if (Object.prototype.hasOwnProperty.call(nr, 'min')) nr.min = toNum(nr.min);
+      if (Object.prototype.hasOwnProperty.call(nr, 'max')) nr.max = toNum(nr.max);
+      if (Object.prototype.hasOwnProperty.call(nr, 'step')) nr.step = toNum(nr.step);
+      payload.validation_rules = nr;
+    }
     if (isChoice) {
       const filtered = (choiceOpts || []).map(o => ({ value: (o.value||'').trim(), label: (o.label||'').trim() })).filter(o => o.value && o.label);
       if (filtered.length === 0) {
@@ -236,6 +250,52 @@ export function SectionBlock({ section, isDraft, busy=false, canMoveUp, canMoveD
                 )}
               </div>
               <textarea placeholder='Texto de la pregunta' rows={2} value={newQ.text} onChange={e => setNewQ(q => ({ ...q, text: e.target.value }))} />
+              {newQ.type === 'number' && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', padding: 8, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6 }}>
+                  <span style={{ fontSize: 12, color: '#475569' }}>Validación numérica</span>
+                  <label style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
+                    Min:
+                    <input
+                      type='text'
+                      placeholder='ej. 0'
+                      value={newQ.validation_rules?.min ?? ''}
+                      onChange={e => setNewQ(v => ({ ...v, validation_rules: { ...(v.validation_rules||{}), min: e.target.value } }))}
+                      style={{ width: 80 }}
+                    />
+                  </label>
+                  <label style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
+                    Max:
+                    <input
+                      type='text'
+                      placeholder='ej. 5'
+                      value={newQ.validation_rules?.max ?? ''}
+                      onChange={e => setNewQ(v => ({ ...v, validation_rules: { ...(v.validation_rules||{}), max: e.target.value } }))}
+                      style={{ width: 80 }}
+                    />
+                  </label>
+                  <label style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      type='checkbox'
+                      checked={!!newQ.validation_rules?.allow_decimal}
+                      onChange={e => setNewQ(v => ({ ...v, validation_rules: { ...(v.validation_rules||{}), allow_decimal: e.target.checked } }))}
+                    />
+                    Permitir decimales
+                  </label>
+                  <label style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
+                    Step:
+                    <input
+                      type='text'
+                      placeholder='ej. 0.1'
+                      value={newQ.validation_rules?.step ?? ''}
+                      onChange={e => setNewQ(v => ({ ...v, validation_rules: { ...(v.validation_rules||{}), step: e.target.value } }))}
+                      style={{ width: 80 }}
+                    />
+                  </label>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>
+                    Ejemplos: Promedio 0–5 con decimales (min 0, max 5, decimales ON, step 0.1) · Estrato 1–6 entero (min 1, max 6, decimales OFF)
+                  </div>
+                </div>
+              )}
               {isChoice && (
                 <div style={{ display:'grid', gap:6 }}>
                   <strong style={{fontSize:12}}>Opciones</strong>

@@ -1,6 +1,6 @@
 ## RUN: Operational Guide (public and secret-free)
 
-This is the technical runbook to start, operate, and verify the application in local or test environments. It contains no credentials. For an overview, read the README (less technical and user-friendly). This document complements the README with hands-on steps and database details.
+This is the technical runbook to start, operate, and verify the application in local or test environments. It contains no credentials. For an overview, read the README (less technical and more user-friendly). This document complements the README with hands-on steps and database details. The platform also supports optional, student-facing ML guidance (e.g., a STEM affinity report) using pluggable models; admins can recompute results on demand.
 
 ---
 
@@ -65,6 +65,13 @@ python manage.py ensure-user-schema
 python manage.py add-admin <code>
 ```
 
+- Recompute ML summaries (CLI) for stored responses using current binding:
+```powershell
+python manage.py recompute-ml --version-id <ID> --only-finalized --limit 100
+# or by questionnaire code (uses latest published)
+python manage.py recompute-ml --code vocacional
+```
+
 ---
 
 ## Current app state (roles & navigation)
@@ -116,6 +123,7 @@ Admin (secured by JWT; cookie refresh)
 - GET `/api/admin/versions/:id/questions` (ordered questions for that version)
 - GET `/api/admin/versions/:id/responses/wide` (pivoted responses; filters + pagination)
 - GET `/api/admin/responses/:response_id` (response detail)
+- POST `/api/admin/versions/:id/ml/recompute` (admin backfill ML for assignments; options: only_finalized, limit, dry_run)
 - GET `/api/admin/users?q=&page=&page_size=` (registered users; search + pagination)
 
 ---
@@ -133,6 +141,14 @@ Helpful test env vars:
 - E2E_ADMIN_CODE, E2E_ADMIN_PASSWORD to unskip the admin E2E
 
 Tests use real HTTP calls and do not import Flask/SQLAlchemy directly.
+
+---
+
+## ML integration quick notes
+
+- Example model provided: a simple scikit‑learn binary classifier (joblib) is included as a template. Replace the artifact and adjust `metadata_json.ml_binding` via the Admin Wizard or manually.
+- Default runtime is scikit‑learn. Torch is optional; if not installed, inference is safely skipped with a reason.
+- Artifacts are looked up by path; if the relative path is missing, the loader also searches `models/` and `backend/models/` by filename.
 
 ---
 

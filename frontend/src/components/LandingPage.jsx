@@ -1,92 +1,42 @@
-import { useEffect, useState } from "react"
-import { Link } from "react-router-dom"
+import { useEffect } from "react";
+import { Link } from "react-router-dom";
 
 export default function LandingPage() {
-  const [darkMode, setDarkMode] = useState(false)
-
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode)
-    document.body.classList.toggle("dark-mode")
-  }
-
-  // No redirige automáticamente: el landing siempre es el punto de entrada.
-  // Si existe una sesión activa de estudiante en esta ventana, sólo sincroniza el usuario mínimo para esta pestaña.
+  // El landing es el punto de entrada. Si existe sesión de estudiante en esta ventana,
+  // sincroniza un usuario mínimo solo para esta pestaña.
   useEffect(() => {
     try {
-      const s = JSON.parse(localStorage.getItem('active_session') || 'null')
-      if (s && s.type === 'student' && s.code) {
-        const existing = JSON.parse(sessionStorage.getItem('usuario') || 'null')
+      const s = JSON.parse(localStorage.getItem("active_session") || "null");
+      if (s && s.type === "student" && s.code) {
+        const existing = JSON.parse(sessionStorage.getItem("usuario") || "null");
         if (!existing || !existing.id_usuario) {
-          const minimal = { codigo_estudiante: s.code, id_usuario: -1 }
-          try { sessionStorage.setItem('usuario', JSON.stringify(minimal)) } catch {}
+          const minimal = { codigo_estudiante: s.code, id_usuario: -1 };
+          try { sessionStorage.setItem("usuario", JSON.stringify(minimal)); } catch {}
         }
       }
     } catch (_) {}
-  }, [])
+  }, []);
 
   return (
     <div
       style={{
         minHeight: "100vh",
-        background: "linear-gradient(135deg, #f0f9ff 0%, #ffffff 50%, #f0fdf4 100%)",
-        position: "relative",
+        background:
+          "radial-gradient(1200px 600px at 10% -10%, rgba(0,112,243,0.06) 0%, transparent 60%)," +
+          "radial-gradient(1000px 500px at 110% 10%, rgba(0,200,150,0.06) 0%, transparent 60%)," +
+          "linear-gradient(135deg, #f8fbff 0%, #f7fff9 100%)",
       }}
     >
-      <button onClick={toggleDarkMode} className="dark-mode-toggle" aria-label="Toggle dark mode">
-        {darkMode ? (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="2" />
-            <path
-              d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
-              stroke="currentColor"
-              strokeWidth="2"
-            />
-          </svg>
-        ) : (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke="currentColor" strokeWidth="2" />
-          </svg>
-        )}
-      </button>
-
-      <div style={{ maxWidth: "72rem", margin: "0 auto", padding: "4rem 1rem" }}>
-        <div className="animate-fade-in" style={{ textAlign: "center", marginBottom: "4rem" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "1.5rem" }}>
-            <div
-              style={{
-                width: "4rem",
-                height: "4rem",
-                background: "linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%)",
-                borderRadius: "50%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                marginRight: "1rem",
-                boxShadow: "0 4px 12px rgba(0, 112, 243, 0.3)",
-              }}
-            >
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path
-                  d="M22 10v6M2 10l10-5 10 5-10 5z"
-                  stroke="white"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M6 12v5c3 3 9 3 12 0v-5"
-                  stroke="white"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </div>
+      <div className="landing-container" style={{ paddingTop: "3rem", paddingBottom: "3rem" }}>
+        {/* Encabezado */}
+        <section className="hero-section animate-fade-in" style={{ marginBottom: "2rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "1rem" }}>
             <h1
               style={{
-                fontSize: "clamp(2.5rem, 5vw, 4rem)",
-                fontWeight: "bold",
-                background: "linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%)",
+                marginLeft: 0,
+                fontSize: "clamp(2.25rem, 5vw, 3.5rem)",
+                fontWeight: 800,
+                background: "linear-gradient(135deg, var(--primary-color), var(--secondary-color))",
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
                 backgroundClip: "text",
@@ -95,170 +45,79 @@ export default function LandingPage() {
               STEM Vocational
             </h1>
           </div>
-
-          <div style={{ maxWidth: "64rem", margin: "0 auto 2rem", lineHeight: "1.6" }}>
-            <p style={{ fontSize: "1.25rem", color: "var(--text-muted-light)", marginBottom: "1rem" }}>
-              Plataforma de orientación vocacional para carreras STEM.
-            </p>
-            <p style={{ fontSize: "1.125rem", color: "var(--text-muted-light)", marginBottom: "1rem" }}>
-              Descubre tu perfil y fortalezas para una mejor decisión profesional.
-            </p>
-            <p style={{ fontSize: "1rem", color: "var(--text-muted-light)" }}>
-              Responde nuestro cuestionario y visualiza tu avance en el panel de control.
-            </p>
-          </div>
-
-          <Link to="/login" className="btn btn-primary" style={{ fontSize: "1.125rem", padding: "1rem 2rem" }}>
-            Iniciar sesión
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M5 12h14M12 5l7 7-7 7"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </Link>
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-            gap: "1.5rem",
-            marginTop: "4rem",
-          }}
-        >
-          {[
-            {
-              icon: (
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M15.5 3H8.5C7.39543 3 6.5 3.89543 6.5 5V19C6.5 20.1046 7.39543 21 8.5 21H15.5C16.6046 21 17.5 20.1046 17.5 19V5C17.5 3.89543 16.6046 3 15.5 3Z"
-                    stroke="#0070f3"
-                    strokeWidth="2"
-                  />
-                  <path d="M9.5 7H14.5M9.5 11H14.5M9.5 15H11.5" stroke="#0070f3" strokeWidth="2" />
-                </svg>
-              ),
-              title: "Cuestionario Integral",
-              desc: "Un solo formulario para recoger datos sociodemográficos, académicos y de habilidades.",
-              color: "blue",
-            },
-            {
-              icon: (
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M9 12l2 2 4-4"
-                    stroke="#00c896"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M21 12c0 1.2-.4 2.3-1 3.3a11.5 11.5 0 0 1-7 7c-1 .6-2.1 1-3.3 1s-2.3-.4-3.3-1a11.5 11.5 0 0 1-7-7c-.6-1-.9-2.1-.9-3.3s.3-2.3.9-3.3a11.5 11.5 0 0 1 7-7c1-.6 2.1-1 3.3-1s2.3.4 3.3 1a11.5 11.5 0 0 1 7 7c.6 1 1 2.1 1 3.3"
-                    stroke="#00c896"
-                    strokeWidth="2"
-                  />
-                </svg>
-              ),
-              title: "Análisis de Inteligencias",
-              desc: "Descubre tus fortalezas según la teoría de las Inteligencias Múltiples.",
-              color: "green",
-            },
-            {
-              icon: (
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M3 3v18h18" stroke="#0070f3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path
-                    d="M7 14l5-5 3 3 4-4"
-                    stroke="#0070f3"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              ),
-              title: "Resultados Instantáneos",
-              desc: "Visualiza tu inteligencia predominante y puntajes en un dashboard claro.",
-              color: "blue",
-            },
-            {
-              icon: (
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 2L2 7V17L12 22L22 17V7L12 2Z" stroke="#00c896" strokeWidth="2" />
-                  <path d="M2 7L12 12M22 7L12 12M12 22V12" stroke="#00c896" strokeWidth="2" />
-                </svg>
-              ),
-              title: "Orientación STEM",
-              desc: "Usa tus resultados para explorar carreras en Ciencia, Tecnología, Ingeniería y Matemáticas.",
-              color: "green",
-            },
-          ].map((item, index) => (
-            <div
-              key={index}
-              className="card animate-fade-in"
-              style={{
-                textAlign: "center",
-                animationDelay: `${index * 0.1}s`,
-                transition: "transform 0.3s ease",
-              }}
-              onMouseEnter={(e) => (e.target.style.transform = "scale(1.05)")}
-              onMouseLeave={(e) => (e.target.style.transform = "scale(1)")}
-            >
-              <div
-                style={{
-                  width: "4rem",
-                  height: "4rem",
-                  backgroundColor: item.color === "blue" ? "rgba(0, 112, 243, 0.1)" : "rgba(0, 200, 150, 0.1)",
-                  borderRadius: "12px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  margin: "0 auto 1rem",
-                  transition: "transform 0.3s ease",
-                }}
-              >
-                {item.icon}
-              </div>
-              <h3 style={{ fontSize: "1.25rem", fontWeight: "600", marginBottom: "0.75rem" }}>{item.title}</h3>
-              <p style={{ color: "var(--text-muted-light)", lineHeight: "1.6" }}>{item.desc}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="animate-fade-in" style={{ textAlign: "center", marginTop: "5rem" }}>
-          <div
-            className="card"
-            style={{
-              background: "linear-gradient(135deg, rgba(0, 112, 243, 0.05) 0%, rgba(0, 200, 150, 0.05) 100%)",
-              border: "1px solid rgba(0, 112, 243, 0.2)",
-              maxWidth: "32rem",
-              margin: "0 auto",
-            }}
-          >
-            <h2 style={{ fontSize: "1.875rem", fontWeight: "bold", marginBottom: "1rem" }}>
-              ¿Listo para descubrir tu futuro?
-            </h2>
-            <p style={{ fontSize: "1.125rem", color: "var(--text-muted-light)", marginBottom: "1.5rem" }}>
-              Comienza tu viaje de autodescubrimiento y encuentra la carrera STEM perfecta para ti.
-            </p>
-            <Link to="/login" className="btn btn-primary">
-              Comenzar ahora
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path
-                  d="M5 12h14M12 5l7 7-7 7"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+          <p style={{ maxWidth: 920, margin: "0 auto", color: "var(--text-muted)", fontSize: "1.05rem" }}>
+            Plataforma para recopilar información sobre orientación vocacional hacia áreas STEM mediante cuestionarios
+            dinámicos. Los resultados pueden incluir una recomendación generada por modelos.
+          </p>
+          <div style={{ marginTop: "1.75rem", display: "flex", justifyContent: "center" }}>
+            <Link to="/login" className="btn btn-primary" style={{ padding: "0.9rem 1.6rem" }}>
+              Comenzar
             </Link>
           </div>
-        </div>
+        </section>
+
+        {/* Públicos */}
+        <section className="animate-fade-in" style={{ marginTop: "2rem" }}>
+          <div className="features-grid">
+            <div className="card" style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              <div className="badge badge-primary" style={{ alignSelf: "start" }}>Estudiantes</div>
+              <h3 style={{ fontSize: "1.25rem", fontWeight: 700 }}>Cuestionario y resumen</h3>
+              <p style={{ color: "var(--text-muted-light)" }}>
+                Acceso con código, diligenciamiento del cuestionario principal y visualización del resumen. Si hay
+                modelo, el resumen puede incluir una recomendación.
+              </p>
+              <div style={{ marginTop: "auto" }}>
+                <Link to="/login" className="btn btn-primary btn-sm">Ingresar</Link>
+              </div>
+            </div>
+            <div className="card" style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              <div className="badge badge-primary" style={{ alignSelf: "start" }}>Administración</div>
+              <h3 style={{ fontSize: "1.25rem", fontWeight: 700 }}>Versiones y publicación</h3>
+              <p style={{ color: "var(--text-muted-light)" }}>
+                Gestión de cuestionarios: crear, editar y publicar versiones, y definir un cuestionario primario.
+              </p>
+              <div style={{ marginTop: "auto" }}>
+                <Link to="/admin" className="btn btn-secondary btn-sm">Abrir portal</Link>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Cómo funciona */}
+        <section className="animate-fade-in" style={{ marginTop: "3rem" }}>
+          <div className="card" style={{ background: "linear-gradient(135deg, rgba(0,112,243,0.04), rgba(0,200,150,0.04))" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1.25rem", alignItems: "start" }}>
+              <div>
+                <h2 style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>Cuestionario dinámico</h2>
+                <p style={{ color: "var(--text-muted)" }}>
+                  La aplicación renderiza cuestionarios a partir de definiciones gestionadas en el módulo de
+                  administración. Las secciones y preguntas pueden ajustarse sin redeploy del frontend.
+                </p>
+              </div>
+              <div>
+                <h2 style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>Recomendación del modelo</h2>
+                <p style={{ color: "var(--text-muted)" }}>
+                  Un modelo entrenado evalúa las respuestas y puede registrar una recomendación con su confianza.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Acceso */}
+        <section className="animate-fade-in" style={{ textAlign: "center", marginTop: "3rem" }}>
+          <div className="card" style={{ maxWidth: 720, margin: "0 auto", borderColor: "rgba(0,112,243,0.2)", background: "linear-gradient(135deg, rgba(0,112,243,0.05), rgba(0,200,150,0.05))" }}>
+            <h2 style={{ fontSize: "1.65rem", fontWeight: 800, marginBottom: "0.75rem" }}>Acceso</h2>
+            <p style={{ color: "var(--text-muted)", marginBottom: "1.25rem" }}>
+              Estudiantes completan el cuestionario principal. La administración gestiona versiones y publicación.
+            </p>
+            <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}>
+              <Link to="/login" className="btn btn-primary">Ingreso estudiantes</Link>
+              <Link to="/admin" className="btn btn-secondary">Portal de administración</Link>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
-  )
+  );
 }

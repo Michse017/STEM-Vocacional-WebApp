@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { listUsers } from '../api';
+import { listUsers, deleteUser } from '../api';
 
 export function UsersTable() {
   const [loading, setLoading] = useState(false);
@@ -52,13 +52,14 @@ export function UsersTable() {
               <th style={{ minWidth: 160 }}>Usuario</th>
               <th style={{ minWidth: 200 }}>Creado</th>
               <th style={{ minWidth: 200 }}>Último acceso</th>
+              <th style={{ width: 120 }}></th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={5} style={{ textAlign:'center' }}>Cargando...</td></tr>
+              <tr><td colSpan={6} style={{ textAlign:'center' }}>Cargando...</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={5} style={{ textAlign:'center' }}>Sin resultados</td></tr>
+              <tr><td colSpan={6} style={{ textAlign:'center' }}>Sin resultados</td></tr>
             ) : (
               rows.map(r => (
                 <tr key={r.id_usuario}>
@@ -67,6 +68,24 @@ export function UsersTable() {
                   <td>{r.username || '—'}</td>
                   <td>{r.created_at ? new Date(r.created_at).toLocaleString() : '—'}</td>
                   <td>{r.last_login_at ? new Date(r.last_login_at).toLocaleString() : '—'}</td>
+                  <td>
+                    <button
+                      className='btn btn-danger btn-sm'
+                      disabled={loading}
+                      onClick={async () => {
+                        if (!window.confirm(`Eliminar usuario ${r.codigo_estudiante} y todos sus datos?`)) return;
+                        setLoading(true); setError('');
+                        try {
+                          await deleteUser(r.id_usuario);
+                          await load(1);
+                        } catch (e) {
+                          setError(e.message || 'No se pudo eliminar usuario');
+                        } finally {
+                          setLoading(false);
+                        }
+                      }}
+                    >Eliminar</button>
+                  </td>
                 </tr>
               ))
             )}
