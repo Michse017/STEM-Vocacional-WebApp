@@ -1,6 +1,7 @@
 import os
 from backend.app import create_app
 
+# Application entry point
 app = create_app()
 
 if __name__ == "__main__":
