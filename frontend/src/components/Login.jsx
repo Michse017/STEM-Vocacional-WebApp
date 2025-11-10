@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { checkUsuario, setupCredenciales, loginConPassword } from "../api"
 import { api as adminApi } from "../admin/api"
 
+
 export default function Login() {
   const [codigoEstudiante, setCodigoEstudiante] = useState("")
   const [error, setError] = useState("")
