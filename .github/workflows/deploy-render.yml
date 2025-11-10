@@ -11,6 +11,7 @@ on:
       - 'requirements.txt'
       - 'Dockerfile'
       - '.dockerignore'
+      - '.github/workflows/**'
 
 jobs:
   deploy:
