@@ -529,6 +529,18 @@ export default function DynamicQuestionnaire() {
             {mlResult.status && mlResult.status !== 'ok' ? (
               <div style={{ marginTop: 8, fontSize: 12, color:'#991b1b', background:'#fef2f2', border:'1px solid #fecaca', padding:8, borderRadius:6 }}>
                 Inferencia omitida: {mlResult.status}{mlResult.reason ? ` · ${mlResult.reason}` : ''}
+                {mlResult.error && (
+                  <>
+                    {` · ${mlResult.error}`}
+                  </>
+                )}
+                {mlResult.env && (
+                  <div style={{ marginTop:4, opacity:0.8 }}>
+                    <code style={{ fontSize:11 }}>
+                      py={mlResult.env.py} skl={mlResult.env.sklearn || 'n/a'} joblib={mlResult.env.joblib || 'n/a'} {mlResult.env.platform}
+                    </code>
+                  </div>
+                )}
               </div>
             ) : (
               (() => {

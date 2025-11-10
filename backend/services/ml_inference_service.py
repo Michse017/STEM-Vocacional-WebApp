@@ -9,6 +9,7 @@ is detected. Unknown containers are skipped safely.
 """
 from __future__ import annotations
 from typing import Any, Dict, Tuple, Optional
+import sys
 import os
 from datetime import datetime
 
@@ -18,6 +19,12 @@ try:
     import joblib  # type: ignore
 except Exception:  # pragma: no cover
     joblib = None  # type: ignore
+
+# sklearn is optional – if missing we still run but omit version metadata
+try:  # pragma: no cover
+    import sklearn  # type: ignore
+except Exception:  # pragma: no cover
+    sklearn = None  # type: ignore
 
 # Optional numpy for vector shape; code avoids hard dependency
 try:
@@ -61,10 +68,38 @@ def try_infer_and_store(s, version, response_obj, answers: Dict[str, Any], quest
         _merge_ml_summary(response_obj, ml_summary)
         return ml_summary
 
+    # Detect Git LFS pointer files (file exists but contains pointer text, not binary)
+    try:
+        with open(resolved_path, 'rb') as _fh:
+            head = _fh.read(128)
+        if b"git-lfs" in head and b"spec/v1" in head:
+            ml_summary = {
+                "status": "skipped",
+                "reason": "artifact_lfs_pointer",
+                "artifact": artifact_path,
+                "error": "Git LFS pointer detected; binary not downloaded",
+            }
+            _merge_ml_summary(response_obj, ml_summary)
+            return ml_summary
+    except Exception:
+        pass
+
     try:
         obj = joblib.load(resolved_path)
     except Exception as e:  # pragma: no cover
-        ml_summary = {"status": "skipped", "reason": "artifact_load_error", "artifact": artifact_path, "error": str(e)}
+        ml_summary = {
+            "status": "skipped",
+            "reason": "artifact_load_error",
+            "artifact": artifact_path,
+            "error": str(e),
+            # Minimal environment fingerprint for remote debugging without exposing internals
+            "env": {
+                "py": sys.version.split(" ")[0],
+                "joblib": getattr(joblib, "__version__", None),
+                "sklearn": getattr(sklearn, "__version__", None),
+                "platform": sys.platform,
+            }
+        }
         _merge_ml_summary(response_obj, ml_summary)
         return ml_summary
 
