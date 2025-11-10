@@ -16,9 +16,9 @@ export function UsersPanel() {
     if (!code) { setErr('Ingresa un código de estudiante.'); return; }
     setLoading(true);
     try {
-      // Intentar login/crear mediante endpoint público existente
-      const data = await api('/usuarios', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo_estudiante: code }) });
-      setMsg(`Usuario listo. ID: ${data.id_usuario}`);
+      // Usar endpoint admin dedicado para creación idempotente
+      const data = await api('/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo_estudiante: code }) });
+      setMsg(`Usuario ${data.codigo_estudiante} listo. ID: ${data.id_usuario}`);
       setCodigo('');
     } catch (e) {
       setErr(e.message || 'No se pudo crear/validar el usuario.');
@@ -40,7 +40,7 @@ export function UsersPanel() {
         {msg && <div className="alert alert-success">{msg}</div>}
         {err && <div className="alert alert-error">{err}</div>}
       </form>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>El ID se genera automáticamente en la base de datos.</p>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>El ID se genera automáticamente al crear el usuario (POST /api/admin/users).</p>
     </div>
   );
 }

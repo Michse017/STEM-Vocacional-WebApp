@@ -184,10 +184,12 @@ def set_primary_questionnaire(code: str):
 		s.commit()
 		return jsonify({"message": "primary_updated", "code": q.code, "is_primary": bool(q.is_primary)})
 
-@admin_dynamic_bp.route("/usuarios", methods=["POST"])
+@admin_dynamic_bp.route("/admin/users", methods=["POST"])
 def admin_create_user():
-	"""Crea un usuario por código (o devuelve el existente). ID es autoincrement en BD.
+	"""Create a student user by code (idempotent, admin-only).
+
 	Body: { "codigo_estudiante": "..." }
+	Returns 201 when created, 200 when already exists.
 	"""
 	data = request.get_json(silent=True) or {}
 	codigo = (data.get("codigo_estudiante") or "").strip()
@@ -200,13 +202,11 @@ def admin_create_user():
 			return jsonify({
 				"id_usuario": existing.id_usuario,
 				"codigo_estudiante": existing.codigo_estudiante,
-				# finalizado (legacy) removed
-			})
+			}), 200
 		nuevo = create_usuario(db, codigo)
 		return jsonify({
 			"id_usuario": nuevo.id_usuario,
 			"codigo_estudiante": nuevo.codigo_estudiante,
-			# finalizado (legacy) removed
 		}), 201
 	except Exception as e:
 		db.rollback()
