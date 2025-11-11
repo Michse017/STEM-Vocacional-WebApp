@@ -1,10 +1,595 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { getDynamicQuestionnaire, getMyDynamicStatus, saveDynamicResponse, finalizeDynamicResponse, saveDynamicResponseKeepAlive, getPrefillValues } from "../api";
+import styled, { keyframes } from "styled-components";
+import { ArrowLeft, ChevronRight, CheckCircle2, XCircle, AlertCircle, Save, Check, Award } from "lucide-react";
+
+// Animations
+const fadeIn = keyframes`
+  from { opacity: 0; }
+  to { opacity: 1; }
+`;
+
+const slideUp = keyframes`
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+`;
+
+const float = keyframes`
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-20px) rotate(5deg); }
+`;
+
+const pulse = keyframes`
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.3; }
+`;
+
+const glow = keyframes`
+  0%, 100% { box-shadow: 0 8px 32px rgba(139, 92, 246, 0.2); }
+  50% { box-shadow: 0 8px 40px rgba(139, 92, 246, 0.4); }
+`;
+
+// Styled Components
+const QuestionnaireContainer = styled.div`
+  min-height: 100vh;
+  background: linear-gradient(135deg, #faf5ff 0%, #eff6ff 50%, #f0fdf4 100%);
+  padding: 2rem 1rem;
+  position: relative;
+  overflow-x: hidden;
+  animation: ${fadeIn} 0.6s ease;
+`;
+
+const FloatingElement = styled.div`
+  position: fixed;
+  opacity: 0.12;
+  pointer-events: none;
+  animation: ${float} ${props => props.duration || '8s'} ease-in-out infinite, ${pulse} 4s ease-in-out infinite;
+  z-index: 0;
+  filter: drop-shadow(0 0 15px currentColor);
+  
+  &.atom {
+    top: 10%;
+    right: 10%;
+    animation-delay: 0s;
+  }
+  
+  &.beaker {
+    bottom: 20%;
+    left: 10%;
+    animation-delay: 2s;
+  }
+  
+  &.gear {
+    top: 60%;
+    right: 5%;
+    animation-delay: 4s;
+  }
+`;
+
+const ContentWrapper = styled.div`
+  max-width: 1200px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+`;
+
+const HeaderCard = styled.div`
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(15px);
+  border-radius: 20px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  animation: ${slideUp} 0.6s ease;
+  position: sticky;
+  top: 20px;
+  z-index: 10;
+`;
+
+const BackButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(139, 92, 246, 0.15);
+  border: 2px solid rgba(139, 92, 246, 0.3);
+  color: #8B5CF6;
+  padding: 0.625rem 1.25rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+  
+  &:hover {
+    background: rgba(139, 92, 246, 0.25);
+    transform: translateX(-5px);
+    box-shadow: 0 6px 16px rgba(139, 92, 246, 0.3);
+  }
+`;
+
+const QuestionnaireTitle = styled.h1`
+  font-size: 2rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 50%, #10B981 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 1rem 0 0.5rem;
+`;
+
+const VersionBadge = styled.span`
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: rgba(107, 114, 128, 0.15);
+  color: #6B7280;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: 0.75rem;
+  border: 1px solid rgba(107, 114, 128, 0.2);
+`;
+
+const AlertBox = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: 12px;
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  animation: ${slideUp} 0.4s ease;
+  
+  ${props => props.variant === 'success' && `
+    background: rgba(16, 185, 129, 0.15);
+    border: 2px solid #10B981;
+    color: #065F46;
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+  `}
+  
+  ${props => props.variant === 'error' && `
+    background: rgba(239, 68, 68, 0.15);
+    border: 2px solid #EF4444;
+    color: #991B1B;
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+  `}
+`;
+
+const MLCard = styled.div`
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.08) 100%);
+  border: 2px solid rgba(16, 185, 129, 0.5);
+  border-radius: 20px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  animation: ${slideUp} 0.6s ease 0.1s both, ${glow} 3s ease-in-out infinite;
+  box-shadow: 0 8px 32px rgba(16, 185, 129, 0.3);
+`;
+
+const MLBadge = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 16px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
+  animation: ${pulse} 2s ease-in-out infinite;
+  
+  ${props => props.$positive ? `
+    background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+    color: white;
+  ` : `
+    background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+    color: white;
+  `}
+`;
+
+const MLText = styled.p`
+  font-size: 0.95rem;
+  color: #065F46;
+  line-height: 1.6;
+  margin: 0.75rem 0;
+`;
+
+const MLDetails = styled.details`
+  margin-top: 1rem;
+  
+  summary {
+    cursor: pointer;
+    color: #059669;
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    
+    &:hover {
+      color: #047857;
+    }
+  }
+`;
+
+const FeaturesGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+`;
+
+const FeatureItem = styled.div`
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(5px);
+  padding: 0.75rem;
+  border-radius: 10px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  
+  strong {
+    color: #047857;
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.85rem;
+  }
+  
+  span {
+    color: #6B7280;
+    font-size: 0.8rem;
+  }
+`;
+
+const SectionFieldset = styled.fieldset`
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(12px);
+  border: 2px solid rgba(139, 92, 246, 0.2);
+  border-radius: 20px;
+  padding: 0;
+  margin: 0 0 1.5rem;
+  animation: ${slideUp} 0.6s ease ${props => props.$index * 0.1}s both;
+  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.12);
+  position: relative;
+  overflow: hidden;
+  
+  &:hover {
+    box-shadow: 0 12px 40px rgba(139, 92, 246, 0.18);
+  }
+`;
+
+const SectionLegend = styled.legend`
+  width: 100%;
+  padding: 1.25rem 1.5rem;
+  margin: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.3s ease;
+  position: relative;
+  
+  &:hover {
+    background: rgba(139, 92, 246, 0.08);
+  }
+  
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(
+      90deg, 
+      #8B5CF6 0%, 
+      #8B5CF6 ${props => props.$progress}%, 
+      rgba(139, 92, 246, 0.15) ${props => props.$progress}%
+    );
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
+  }
+`;
+
+const SectionTitleDiv = styled.div`
+  flex: 1;
+`;
+
+const SectionName = styled.h3`
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #1F2937;
+  margin: 0 0 0.25rem;
+`;
+
+const SectionCount = styled.span`
+  font-size: 0.85rem;
+  color: #6B7280;
+  font-weight: 500;
+`;
+
+const ChevronIconStyled = styled(ChevronRight)`
+  transition: transform 0.3s ease;
+  transform: ${props => props.$open ? 'rotate(90deg)' : 'rotate(0)'};
+  color: #8B5CF6;
+  filter: drop-shadow(0 0 6px rgba(139, 92, 246, 0.4));
+`;
+
+const SectionContent = styled.div`
+  padding: ${props => props.$open ? '1.5rem' : '0 1.5rem'};
+  max-height: ${props => props.$open ? '10000px' : '0'};
+  overflow: hidden;
+  transition: all 0.5s ease;
+  opacity: ${props => props.$open ? '1' : '0'};
+`;
+
+const QuestionDiv = styled.div`
+  margin-bottom: 1.5rem;
+`;
+
+const QuestionLabel = styled.label`
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1F2937;
+  margin-bottom: 0.5rem;
+  
+  ${props => props.$required && `
+    &::after {
+      content: ' *';
+      color: #EF4444;
+      font-weight: 700;
+    }
+  `}
+`;
+
+const StyledInput = styled.input`
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(139, 92, 246, 0.25);
+  border-radius: 12px;
+  font-size: 0.95rem;
+  color: #1F2937;
+  transition: all 0.3s ease;
+  
+  &:focus {
+    outline: none;
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+    background: rgba(255, 255, 255, 0.95);
+  }
+  
+  &:disabled {
+    background: rgba(156, 163, 175, 0.1);
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+`;
+
+const StyledTextarea = styled.textarea`
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(139, 92, 246, 0.25);
+  border-radius: 12px;
+  font-size: 0.95rem;
+  color: #1F2937;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+  transition: all 0.3s ease;
+  
+  &:focus {
+    outline: none;
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+    background: rgba(255, 255, 255, 0.95);
+  }
+  
+  &:disabled {
+    background: rgba(156, 163, 175, 0.1);
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+`;
+
+const RadioChoiceDiv = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+`;
+
+const RadioChoiceLabel = styled.label`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.7);
+  border: 2px solid ${props => props.$checked ? '#3B82F6' : 'rgba(139, 92, 246, 0.2)'};
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: #3B82F6;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+  }
+  
+  input {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #3B82F6;
+  }
+  
+  ${props => props.$checked && `
+    background: rgba(59, 130, 246, 0.12);
+    font-weight: 600;
+    color: #1E40AF;
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+  `}
+`;
+
+const CheckboxLabel = styled.label`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.7);
+  border: 2px solid ${props => props.$checked ? '#10B981' : 'rgba(139, 92, 246, 0.2)'};
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: #10B981;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+  }
+  
+  input {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #10B981;
+  }
+  
+  ${props => props.$checked && `
+    background: rgba(16, 185, 129, 0.12);
+    font-weight: 600;
+    color: #065F46;
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+  `}
+`;
+
+const FieldErrorDiv = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #DC2626;
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+  font-weight: 500;
+  
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+`;
+
+const ActionBar = styled.div`
+  position: sticky;
+  bottom: 20px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(15px);
+  border-radius: 20px;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 -8px 32px rgba(139, 92, 246, 0.2);
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    
+    button {
+      width: 100%;
+    }
+  }
+`;
+
+const BaseButton = styled.button`
+  padding: 0.875rem 1.75rem;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: none;
+  position: relative;
+  overflow: hidden;
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  &:hover:not(:disabled) {
+    transform: translateY(-3px);
+  }
+  
+  &:active:not(:disabled) {
+    transform: translateY(-1px);
+  }
+`;
+
+const PrimaryButton = styled(BaseButton)`
+  background: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%);
+  color: white;
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
+  
+  &:hover:not(:disabled) {
+    box-shadow: 0 8px 24px rgba(139, 92, 246, 0.6);
+  }
+`;
+
+const SecondaryButton = styled(BaseButton)`
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.08) 100%);
+  color: #3B82F6;
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.2);
+  
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.25) 0%, rgba(59, 130, 246, 0.15) 100%);
+    border-color: #3B82F6;
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+  }
+`;
+
+const SuccessButton = styled(BaseButton)`
+  background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+  color: white;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4);
+  
+  &:hover:not(:disabled) {
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.6);
+  }
+`;
+
+const CancelButton = styled(BaseButton)`
+  background: rgba(156, 163, 175, 0.1);
+  color: #6B7280;
+  border: 2px solid rgba(156, 163, 175, 0.3);
+  
+  &:hover:not(:disabled) {
+    background: rgba(156, 163, 175, 0.2);
+  }
+`;
+
+const LoadingSpinner = styled.div`
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+`;
 
 function InputForQuestion({ q, value, onChange, disabled, answers, fieldErrors }) {
-  const common = { className: "form-control", style: { width:"100%" }, disabled: !!disabled };
-
   // Helpers for date bounds based on rules and other answers
   const computeDateBounds = (q) => {
     const r = q.validation_rules || {};
@@ -58,58 +643,59 @@ function InputForQuestion({ q, value, onChange, disabled, answers, fieldErrors }
     }
     return { minAttr, maxAttr };
   };
+  
   switch (q.type) {
     case "textarea":
-      return <textarea {...common} value={value || ""} onChange={e => onChange(e.target.value)} rows={3} />;
+      return <StyledTextarea value={value || ""} onChange={e => onChange(e.target.value)} rows={3} disabled={!!disabled} placeholder={q.placeholder} />;
     case "number": {
       const vr = q.validation_rules || {};
       const stepVal = vr.allow_decimal ? (vr.step !== undefined ? vr.step : 'any') : 1;
       const props = { min: vr.min ?? undefined, max: vr.max ?? undefined, step: stepVal };
       const isIcfesGlobal = q.code === 'puntaje_global_saber11';
-      return <input {...common} {...props} type="number" value={value ?? ""} onChange={e => onChange(e.target.value === "" ? "" : Number(e.target.value))} disabled={!!disabled || isIcfesGlobal} />;
+      return <StyledInput {...props} type="number" value={value ?? ""} onChange={e => onChange(e.target.value === "" ? "" : Number(e.target.value))} disabled={!!disabled || isIcfesGlobal} placeholder={q.placeholder} />;
     }
     case "date":
       {
         const { minAttr, maxAttr } = computeDateBounds(q);
-        return <input {...common} type="date" min={minAttr} max={maxAttr} value={value || ""} onChange={e => onChange(e.target.value)} />;
+        return <StyledInput type="date" min={minAttr} max={maxAttr} value={value || ""} onChange={e => onChange(e.target.value)} disabled={!!disabled} />;
       }
     case "email":
-      return <input {...common} type="email" value={value || ""} onChange={e => onChange(e.target.value)} />;
+      return <StyledInput type="email" value={value || ""} onChange={e => onChange(e.target.value)} disabled={!!disabled} placeholder={q.placeholder} />;
     case "boolean":
       return (
-        <div style={{display:"flex", gap:"1rem"}}>
-          <label style={{display:"flex", alignItems:"center", gap:"0.5rem"}}>
+        <RadioChoiceDiv>
+          <RadioChoiceLabel $checked={value === true}>
             <input type="radio" disabled={!!disabled} checked={value === true} onChange={() => onChange(true)} /> Sí
-          </label>
-          <label style={{display:"flex", alignItems:"center", gap:"0.5rem"}}>
+          </RadioChoiceLabel>
+          <RadioChoiceLabel $checked={value === false}>
             <input type="radio" disabled={!!disabled} checked={value === false} onChange={() => onChange(false)} /> No
-          </label>
-        </div>
+          </RadioChoiceLabel>
+        </RadioChoiceDiv>
       );
     case "single_choice":
     case "choice": {
       const hasOther = (q.options || []).some(op => op.is_other);
       const selectedIsOther = hasOther && value && (q.options || []).some(op => op.is_other && op.value === value);
       return (
-        <div style={{display:"flex", flexDirection:"column", gap:"0.5rem"}}>
-          <div style={{display:"flex", flexWrap:"wrap", gap:"1rem"}}>
+        <>
+          <RadioChoiceDiv>
             {q.options?.map(op => (
-              <label key={op.value} style={{display:"flex", alignItems:"center", gap:"0.5rem"}}>
+              <RadioChoiceLabel key={op.value} $checked={value === op.value}>
                 <input type="radio" disabled={!!disabled} name={q.code} value={op.value} checked={value === op.value} onChange={() => onChange(op.value)} />
                 {op.label}{op.is_other ? ' (Otro)' : ''}
-              </label>
+              </RadioChoiceLabel>
             ))}
-          </div>
+          </RadioChoiceDiv>
           {hasOther && (
-            <input
-              className="form-control"
+            <StyledInput
+              style={{ marginTop: "0.75rem" }}
               placeholder="Especifique (otro)"
               value={(answers && answers[`otro_${q.code}`]) || ''}
               onChange={e => onChange({ __other: e.target.value })}
               disabled={!selectedIsOther || !!disabled}
             />
           )}
-        </div>
+        </>
       );
     }
     case "multi_choice": {
@@ -151,38 +737,22 @@ function InputForQuestion({ q, value, onChange, disabled, answers, fieldErrors }
       const noneSelected = noneOption ? selected.has(noneOption.value) : false;
 
       return (
-        <div style={{display:"flex", flexDirection:"column", gap:"0.5rem"}}>
+        <RadioChoiceDiv>
           {options.map(op => {
             const checked = selected.has(op.value);
             const disabledOpt = !!disabled || (noneSelected && (!noneOption || op.value !== noneOption.value));
             return (
-              <label key={op.value} style={{display:"flex", alignItems:"center", gap:"0.5rem"}}>
+              <CheckboxLabel key={op.value} $checked={checked}>
                 <input type="checkbox" disabled={disabledOpt} checked={checked} onChange={e => toggle(op, e.target.checked)} />
                 {op.label}{op.is_other ? ' (Otro)' : ''}
-              </label>
+              </CheckboxLabel>
             );
           })}
-          {/* Sin campo de texto para multi_choice 'Otro' */}
-          {/* Inline field error */}
-          {!!fieldErrors?.length && (
-            <div style={{ color: 'crimson', fontSize: 12 }}>
-              {fieldErrors.map((m, i) => <div key={i}>{m}</div>)}
-            </div>
-          )}
-        </div>
+        </RadioChoiceDiv>
       );
     }
     default:
-      return (
-        <>
-          <input {...common} type="text" value={value || ""} onChange={e => onChange(e.target.value)} />
-          {!!fieldErrors?.length && (
-            <div style={{ color: 'crimson', fontSize: 12 }}>
-              {fieldErrors.map((m, i) => <div key={i}>{m}</div>)}
-            </div>
-          )}
-        </>
-      );
+      return <StyledInput type="text" value={value || ""} onChange={e => onChange(e.target.value)} disabled={!!disabled} placeholder={q.placeholder} />;
   }
 }
 
@@ -477,106 +1047,149 @@ export default function DynamicQuestionnaire() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [finalized, answers, code, usuario]);
 
-  if (loading) return <div className="cuestionario-container"><div className="card" style={{padding:"1rem"}}>Cargando...</div></div>;
-  if (error) return <div className="cuestionario-container"><div className="card" style={{padding:"1rem", color:"crimson"}}>{error}</div></div>;
-  if (!data) return <div className="cuestionario-container"><div className="card" style={{padding:"1rem"}}>No encontrado.</div></div>;
+  if (loading) {
+    return (
+      <QuestionnaireContainer>
+        <ContentWrapper>
+          <HeaderCard>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <LoadingSpinner />
+              <span>Cargando cuestionario...</span>
+            </div>
+          </HeaderCard>
+        </ContentWrapper>
+      </QuestionnaireContainer>
+    );
+  }
+
+  if (error) {
+    return (
+      <QuestionnaireContainer>
+        <ContentWrapper>
+          <HeaderCard>
+            <AlertBox variant="error">
+              <XCircle size={20} />
+              {error}
+            </AlertBox>
+          </HeaderCard>
+        </ContentWrapper>
+      </QuestionnaireContainer>
+    );
+  }
+
+  if (!data) {
+    return (
+      <QuestionnaireContainer>
+        <ContentWrapper>
+          <HeaderCard>
+            <AlertBox variant="error">
+              <XCircle size={20} />
+              Cuestionario no encontrado.
+            </AlertBox>
+          </HeaderCard>
+        </ContentWrapper>
+      </QuestionnaireContainer>
+    );
+  }
 
   return (
-    <div className="cuestionario-container">
-      <div className="card" style={{padding:"1.25rem"}}>
-        <button className="btn btn-secondary" onClick={() => navigate(-1)} style={{marginBottom:"1rem"}}>Volver</button>
-        <h2 style={{marginBottom:"0.5rem"}}>{data.title || code}</h2>
-        <div style={{fontSize:"0.875rem", color:"var(--text-muted)", marginBottom:"1rem"}}>Versión #{data.version_number} · Estado {data.status}</div>
-        {finalized && (
-          <div className="alert alert-success" style={{marginBottom:"1rem"}}>
-            Este cuestionario fue finalizado. Estás en modo solo lectura.
-          </div>
-        )}
+    <QuestionnaireContainer>
+      {/* Floating decorative elements */}
+      <FloatingElement className="atom">
+        <Award size={80} color="#8B5CF6" />
+      </FloatingElement>
+      <FloatingElement className="beaker" duration="10s">
+        <CheckCircle2 size={80} color="#10B981" />
+      </FloatingElement>
+      <FloatingElement className="gear" duration="12s">
+        <AlertCircle size={80} color="#F59E0B" />
+      </FloatingElement>
+
+      <ContentWrapper>
+        <HeaderCard>
+          <BackButton onClick={() => navigate(-1)}>
+            <ArrowLeft size={18} />
+            Volver
+          </BackButton>
+
+          <QuestionnaireTitle>
+            {data.title || code}
+            <VersionBadge>v{data.version_number}</VersionBadge>
+          </QuestionnaireTitle>
+
+          {finalized && (
+            <AlertBox variant="success">
+              <CheckCircle2 size={20} />
+              Este cuestionario fue finalizado. Estás en modo solo lectura.
+            </AlertBox>
+          )}
+        </HeaderCard>
 
         {/* ML result card shown after finalize */}
         {mlResult && (
-          <div className="card" style={{
-            padding: '1rem',
-            border: '1px solid #d1fae5',
-            background: '#ecfdf5',
-            borderRadius: 8,
-            marginBottom: '1rem'
-          }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 6 }}>
-              <strong style={{ color:'#065f46' }}>Resultado del modelo</strong>
-              {typeof mlResult.prob === 'number' && (
-                <span style={{ fontSize:12, color:'#047857' }}>Probabilidad: {(mlResult.prob * 100).toFixed(1)}%</span>
+          <MLCard>
+            <MLBadge $positive={mlResult.decision}>
+              {mlResult.decision ? (
+                <>
+                  <CheckCircle2 size={24} />
+                  Perfil STEM
+                </>
+              ) : (
+                <>
+                  <XCircle size={24} />
+                  Perfil No STEM
+                </>
               )}
-            </div>
-            <div style={{ display:'flex', flexWrap:'wrap', alignItems:'center', gap: 12 }}>
-              {(() => {
-                const cls = Array.isArray(mlResult.class_names) ? mlResult.class_names : null;
-                const posLabel = mlResult.positive_label || (cls && cls[mlResult.positive_index || 1]);
-                const friendly = mlResult.label || (mlResult.decision ? (posLabel || 'POSITIVE') : (posLabel ? `NO_${posLabel}` : 'NEGATIVE'));
-                const decisionText = `Clasificación: ${friendly}`;
-                return (
-                  <span style={{
-                    padding: '0.4rem 0.7rem',
-                    borderRadius: 999,
-                    fontWeight: 600,
-                    color: mlResult.decision ? '#065f46' : '#991b1b',
-                    background: mlResult.decision ? '#d1fae5' : '#fee2e2',
-                    border: `1px solid ${mlResult.decision ? '#a7f3d0' : '#fecaca'}`
-                  }}>{decisionText}</span>
-                );
-              })()}
-            </div>
+            </MLBadge>
+
+            {typeof mlResult.prob === 'number' && (
+              <MLText style={{ fontWeight: 600 }}>
+                Probabilidad: {(mlResult.prob * 100).toFixed(1)}%
+              </MLText>
+            )}
+
             {mlResult.status && mlResult.status !== 'ok' ? (
-              <div style={{ marginTop: 8, fontSize: 12, color:'#991b1b', background:'#fef2f2', border:'1px solid #fecaca', padding:8, borderRadius:6 }}>
+              <AlertBox variant="error" style={{ marginTop: '0.75rem' }}>
+                <AlertCircle size={16} />
                 Inferencia omitida: {mlResult.status}{mlResult.reason ? ` · ${mlResult.reason}` : ''}
-                {mlResult.error && (
-                  <>
-                    {` · ${mlResult.error}`}
-                  </>
-                )}
-                {mlResult.env && (
-                  <div style={{ marginTop:4, opacity:0.8 }}>
-                    <code style={{ fontSize:11 }}>
-                      py={mlResult.env.py} skl={mlResult.env.sklearn || 'n/a'} joblib={mlResult.env.joblib || 'n/a'} {mlResult.env.platform}
-                    </code>
-                  </div>
-                )}
-              </div>
+                {mlResult.error && <> · {mlResult.error}</>}
+              </AlertBox>
             ) : (
               (() => {
-                // Mensaje enfocado al estudiante (sin tecnicismos ni umbrales)
-                const isPositive = mlResult.decision === true; // true => afinidad con STEM
+                const isPositive = mlResult.decision === true;
                 const stemMeaning = 'STEM se refiere a programas en Ciencia, Tecnología, Ingeniería y Matemáticas.';
                 const modelNote = 'Este resultado fue generado automáticamente a partir de tus respuestas por un modelo estadístico.';
                 const commonTail = 'Tómalo como una guía para explorar; no define tu futuro.';
                 const positiveMsg = `Tus respuestas muestran una alta probabilidad de afinidad con áreas STEM. ${stemMeaning} ${modelNote} ${commonTail}`;
                 const negativeMsg = `Con base en tus respuestas, el modelo estima menor probabilidad de afinidad con áreas STEM. ${stemMeaning} ${modelNote} Puede que otras áreas (por ejemplo, sociales, humanidades, artes, salud, etc.) se ajusten mejor a tus intereses hoy. También puedes fortalecer tu interés por STEM con actividades y cursos si así lo deseas. ${commonTail}`;
                 return (
-                  <div style={{ marginTop: 8, fontSize: 12, lineHeight:1.4, color:'#064e3b' }}>{isPositive ? positiveMsg : negativeMsg}</div>
+                  <MLText>{isPositive ? positiveMsg : negativeMsg}</MLText>
                 );
               })()
             )}
+
             {/* Optional feature debug */}
             {mlResult.features && (
-              <details style={{ marginTop: 8 }}>
-                <summary style={{ cursor:'pointer', color:'#047857' }}>Ver variables utilizadas</summary>
-                <div style={{ fontSize: 12, color:'#065f46', marginTop:6, display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:6 }}>
-                  {Object.entries(mlResult.features).map(([k,v]) => (
-                    <div key={k} style={{ padding:'6px 8px', background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:6 }}>
-                      <div style={{ fontWeight:600 }}>{k}</div>
-                      <div>{String(v)}</div>
-                    </div>
+              <MLDetails>
+                <summary>
+                  <ChevronRight size={16} />
+                  Ver variables utilizadas
+                </summary>
+                <FeaturesGrid>
+                  {Object.entries(mlResult.features).map(([k, v]) => (
+                    <FeatureItem key={k}>
+                      <strong>{k}</strong>
+                      <span>{String(v)}</span>
+                    </FeatureItem>
                   ))}
-                </div>
-              </details>
+                </FeaturesGrid>
+              </MLDetails>
             )}
-          </div>
+          </MLCard>
         )}
 
-        <form onSubmit={(e) => e.preventDefault()} style={{display:"flex", flexDirection:"column", gap:"1rem"}}>
-          {/* Código de estudiante removido del UI; el backend asocia por sesión */}
-
-          {data.sections?.map(sec => {
+        <form onSubmit={(e) => e.preventDefault()}>
+          {data.sections?.map((sec, secIndex) => {
             const visibleQIds = visibleMap[sec.id] || [];
             const hasVisible = visibleQIds.length > 0;
             if (!hasVisible) return null;
@@ -587,51 +1200,86 @@ export default function DynamicQuestionnaire() {
               return acc + (has ? 1 : 0);
             }, 0);
             const totalInSec = visibleQIds.length;
+            const progress = totalInSec > 0 ? Math.round((answeredInSec / totalInSec) * 100) : 0;
+
             return (
-              <fieldset key={sec.id} className="accordion-section">
-                <legend onClick={() => setOpenSections(prev => ({ ...prev, [sec.id]: !isOpen }))} aria-expanded={isOpen}>
-                  <span>{sec.title}</span>
-                  <span style={{display:"flex", alignItems:"center", gap:"0.75rem"}}>
-                    <span style={{fontSize:"0.9rem", color:"var(--text-muted)"}}>{answeredInSec}/{totalInSec}</span>
-                    <span className="accordion-icon" style={{transform: isOpen ? "rotate(90deg)" : "rotate(0deg)"}}>›</span>
-                  </span>
-                </legend>
-                {isOpen && (
-                  <div className="fieldset-content">
-                    <div style={{display:"flex", flexDirection:"column", gap:"0.75rem"}}>
-                      {sec.questions?.filter(q => visibleQIds.includes(q.id)).map(q => (
-                        <div key={q.id}>
-                          <label style={{display:"block", fontWeight:600, marginBottom:"0.25rem"}}>
-                            {q.text} {q.required && <span style={{color:"crimson"}}>*</span>}
-                          </label>
-                          <InputForQuestion q={q} value={answers[q.code]} onChange={v => handleChange(q.code, v)} disabled={finalized} answers={answers} fieldErrors={fieldErrors[q.code]} />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </fieldset>
+              <SectionFieldset key={sec.id} $index={secIndex}>
+                <SectionLegend
+                  onClick={() => setOpenSections(prev => ({ ...prev, [sec.id]: !isOpen }))}
+                  $progress={progress}
+                >
+                  <SectionTitleDiv>
+                    <SectionName>{sec.title}</SectionName>
+                    <SectionCount>{answeredInSec}/{totalInSec} respondidas</SectionCount>
+                  </SectionTitleDiv>
+                  <ChevronIconStyled size={24} $open={isOpen} />
+                </SectionLegend>
+
+                <SectionContent $open={isOpen}>
+                  {sec.questions?.filter(q => visibleQIds.includes(q.id)).map(q => (
+                    <QuestionDiv key={q.id}>
+                      <QuestionLabel $required={q.required}>
+                        {q.text}
+                      </QuestionLabel>
+                      <InputForQuestion
+                        q={q}
+                        value={answers[q.code]}
+                        onChange={v => handleChange(q.code, v)}
+                        disabled={finalized}
+                        answers={answers}
+                        fieldErrors={fieldErrors[q.code]}
+                      />
+                      {!!fieldErrors[q.code]?.length && (
+                        <FieldErrorDiv>
+                          <AlertCircle size={14} />
+                          {fieldErrors[q.code][0]}
+                        </FieldErrorDiv>
+                      )}
+                    </QuestionDiv>
+                  ))}
+                </SectionContent>
+              </SectionFieldset>
             );
           })}
 
-          {submitErr && <div className="alert alert-error">{submitErr}</div>}
-          {submitMsg && <div className="alert alert-success">{submitMsg}</div>}
+          {submitErr && (
+            <AlertBox variant="error">
+              <XCircle size={20} />
+              {submitErr}
+            </AlertBox>
+          )}
 
-          <div style={{display:"flex", gap:"1rem", flexWrap:"wrap"}}>
-            {!finalized && (
+          {submitMsg && (
+            <AlertBox variant="success">
+              <CheckCircle2 size={20} />
+              {submitMsg}
+            </AlertBox>
+          )}
+
+          <ActionBar>
+            {!finalized ? (
               <>
-                <button type="button" className="btn btn-secondary" onClick={handleSave} disabled={busySave || busyFinalize}>
-                  {busySave ? 'Guardando…' : 'Guardar'}
-                </button>
-                <button type="button" className="btn btn-primary" onClick={handleFinalize} disabled={busyFinalize || busySave}>
-                  {busyFinalize ? 'Finalizando…' : 'Finalizar'}
-                </button>
+                <SecondaryButton type="button" onClick={handleSave} disabled={busySave || busyFinalize}>
+                  {busySave ? <LoadingSpinner /> : <Save size={18} />}
+                  Guardar
+                </SecondaryButton>
+                <PrimaryButton type="button" onClick={handleFinalize} disabled={busyFinalize || busySave}>
+                  {busyFinalize ? <LoadingSpinner /> : <Check size={18} />}
+                  Finalizar
+                </PrimaryButton>
+                <CancelButton type="button" onClick={() => navigate(-1)} disabled={busySave || busyFinalize}>
+                  Cancelar
+                </CancelButton>
               </>
+            ) : (
+              <SuccessButton type="button" onClick={() => navigate(-1)}>
+                <ArrowLeft size={18} />
+                Volver al Dashboard
+              </SuccessButton>
             )}
-            <button type="button" className="btn" onClick={() => navigate("/dashboard", { state: { usuario } })}>{finalized ? "Volver al Dashboard" : "Cancelar"}</button>
-          </div>
+          </ActionBar>
         </form>
-      </div>
-    </div>
+      </ContentWrapper>
+    </QuestionnaireContainer>
   );
 }
