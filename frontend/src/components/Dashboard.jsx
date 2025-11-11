@@ -176,18 +176,21 @@ const StatusBadge = styled.span`
   font-weight: 600;
   
   &.new {
-    background: rgba(245, 158, 11, 0.1);
+    background: rgba(245, 158, 11, 0.15);
     color: #F59E0B;
+    border: 1px solid rgba(245, 158, 11, 0.3);
   }
   
   &.in_progress {
-    background: rgba(59, 130, 246, 0.1);
+    background: rgba(59, 130, 246, 0.15);
     color: #3B82F6;
+    border: 1px solid rgba(59, 130, 246, 0.3);
   }
   
   &.finalized {
-    background: rgba(16, 185, 129, 0.1);
+    background: rgba(16, 185, 129, 0.15);
     color: #10B981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
   }
 `
 
@@ -312,6 +315,32 @@ const ActionButtonsRow = styled.div`
   }
 `
 
+const ListButton = styled(Button)`
+  &.secondary {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%);
+    color: #3B82F6;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    
+    &:hover {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0.1) 100%);
+      border-color: rgba(59, 130, 246, 0.3);
+    }
+  }
+`
+
+const LogoutButton = styled(Button)`
+  &.danger {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    
+    &:hover {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(239, 68, 68, 0.1) 100%);
+      border-color: rgba(239, 68, 68, 0.3);
+    }
+  }
+`
+
 const SectionTitle = styled.h2`
   font-size: 1.5rem;
   font-weight: 700;
@@ -320,6 +349,16 @@ const SectionTitle = styled.h2`
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  
+  svg {
+    color: #3B82F6;
+  }
+`
+
+const HistorySectionTitle = styled(SectionTitle)`
+  svg {
+    color: #10B981;
+  }
 `
 
 const QuestionnaireList = styled.div`
@@ -337,11 +376,29 @@ const QuestionnaireItem = styled.div`
   border-radius: 12px;
   border: 1px solid rgba(226, 232, 240, 0.5);
   transition: all 0.3s ease;
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    border-radius: 12px 0 0 12px;
+    background: linear-gradient(180deg, #3B82F6 0%, #10B981 100%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
 
   &:hover {
     background: rgba(255, 255, 255, 0.8);
-    border-color: rgba(139, 92, 246, 0.3);
+    border-color: rgba(59, 130, 246, 0.3);
     transform: translateX(4px);
+    
+    &::before {
+      opacity: 1;
+    }
   }
 
   @media (max-width: 768px) {
@@ -377,6 +434,7 @@ const EmptyState = styled.div`
     height: 64px;
     margin-bottom: 1rem;
     opacity: 0.3;
+    color: #F59E0B;
   }
   
   p {
@@ -601,17 +659,17 @@ export default function Dashboard() {
         ) : null}
 
         <ActionButtonsRow>
-          <Button 
+          <ListButton 
             className="secondary" 
             onClick={() => navigate('/dynamic', { state: { usuario } })}
           >
             <List size={20} />
             Cuestionarios Disponibles
-          </Button>
-          <Button className="danger" onClick={handleLogout}>
+          </ListButton>
+          <LogoutButton className="danger" onClick={handleLogout}>
             <LogOut size={20} />
             Cerrar Sesión
-          </Button>
+          </LogoutButton>
         </ActionButtonsRow>
 
         <Card style={{ marginBottom: "2rem" }}>
@@ -663,10 +721,10 @@ export default function Dashboard() {
 
         {finalizedQuestionnaires.length > 0 && (
           <Card>
-            <SectionTitle>
+            <HistorySectionTitle>
               <CheckCircle2 size={24} />
               Cuestionarios Finalizados
-            </SectionTitle>
+            </HistorySectionTitle>
             <QuestionnaireList>
               {finalizedQuestionnaires
                 .sort((a, b) => {
