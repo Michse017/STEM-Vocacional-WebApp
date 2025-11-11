@@ -348,6 +348,9 @@ export default function Login() {
   const [showConfirm, setShowConfirm] = useState(false)
   const navigate = useNavigate()
   const [activeSession, setActiveSession] = useState(null)
+  // Data policy state
+  const [policyAccepted, setPolicyAccepted] = useState(false)
+  const [showPolicy, setShowPolicy] = useState(false)
 
   // Detecta si debe mostrar el formulario de admin desde el parámetro URL
   useEffect(() => {
@@ -463,6 +466,12 @@ export default function Login() {
         if (studentPhase === 'setup') {
           if (!username.trim() || !studentPassword.trim() || !confirm.trim()) {
             throw new Error('Completa usuario, contraseña y confirmación.')
+          }
+          if (studentPassword !== confirm) {
+            throw new Error('Las contraseñas no coinciden.')
+          }
+          if (!policyAccepted) {
+            throw new Error('Debes aceptar la política de tratamiento de datos para continuar.')
           }
           await setupCredenciales({ codigoEstudiante, username: username.trim().toLowerCase(), password: studentPassword, confirm })
           setStudentPhase('password')
@@ -750,7 +759,29 @@ export default function Login() {
                     </InputWrapper>
                   </InputGroup>
 
-                  <SubmitButton type="submit" disabled={loading}>
+                  {/* Política de tratamiento de datos */}
+                  <div style={{
+                    border: '1px solid rgba(0,0,0,0.08)',
+                    borderRadius: '0.75rem',
+                    padding: '0.875rem',
+                    background: 'rgba(255,255,255,0.6)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                      <input
+                        id="policy-accept"
+                        type="checkbox"
+                        checked={policyAccepted}
+                        onChange={(e) => setPolicyAccepted(e.target.checked)}
+                        style={{ marginTop: 4 }}
+                      />
+                      <label htmlFor="policy-accept" style={{ color: '#374151', fontSize: 14, lineHeight: '1.25rem' }}>
+                        Declaro que he leído y acepto la <button type="button" onClick={() => setShowPolicy(true)} style={{ color: '#4F46E5', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Política de tratamiento de datos</button>.
+                      </label>
+                    </div>
+                    <HintText>La aceptación es obligatoria para crear tus credenciales.</HintText>
+                  </div>
+
+                  <SubmitButton type="submit" disabled={loading || !policyAccepted}>
                     {loading ? (
                       <>
                         <SpinnerIcon size={20} />
@@ -813,12 +844,60 @@ export default function Login() {
               setStudentPassword('')
               setUsername('')
               setConfirm('')
+              setPolicyAccepted(false)
+              setShowPolicy(false)
             }}
           >
             {isAdmin ? "Acceso de Estudiante" : "Acceso de Admin"}
           </ModeToggleButton>
         </Footer>
       </Card>
+
+      {/* Modal Política de Datos */}
+      {showPolicy && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50
+        }}>
+          <div style={{
+            width: 'min(720px, 92vw)', maxHeight: '80vh', overflow: 'auto',
+            background: 'white', borderRadius: '1rem', padding: '1.25rem',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.2)'
+          }}>
+            <h2 style={{ margin: 0, marginBottom: 8, fontSize: 20, fontWeight: 700, color: '#111827' }}>Política de Tratamiento de Datos</h2>
+            <p style={{ color: '#4B5563', fontSize: 14 }}>
+              Esta aplicación trata los datos personales con fines académicos y estadísticos
+              relacionados con el proyecto STEM Vocacional. La información se recolecta y
+              utiliza para gestionar el acceso, mejorar la experiencia y generar reportes
+              agregados. No se realizarán perfiles comerciales ni se cederán datos a
+              terceros ajenos al proyecto sin autorización.
+            </p>
+            <ul style={{ color: '#4B5563', fontSize: 14, paddingLeft: 18, marginTop: 8 }}>
+              <li>Responsable del tratamiento: Equipo del proyecto STEM Vocacional.</li>
+              <li>Datos tratados: identificación de estudiante, credenciales, respuestas y métricas de uso.</li>
+              <li>Base legal: consentimiento del titular y finalidad académica.</li>
+              <li>Derechos: acceso, actualización, rectificación y supresión de datos.</li>
+              <li>Contacto: soporte del proyecto para ejercer derechos o consultas.</li>
+            </ul>
+            <p style={{ color: '#4B5563', fontSize: 14, marginTop: 8 }}>
+              Al aceptar, confirmas que leíste y comprendiste esta política y autorizas el
+              tratamiento descrito. Puedes revocar tu consentimiento en cualquier momento
+              a través de los canales de contacto del proyecto.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+              <button type="button" onClick={() => setShowPolicy(false)} style={{
+                padding: '0.5rem 1rem', borderRadius: 8, border: '1px solid #E5E7EB', background: 'white', cursor: 'pointer'
+              }}>Cerrar</button>
+              {!policyAccepted && (
+                <button type="button" onClick={() => { setPolicyAccepted(true); setShowPolicy(false); }} style={{
+                  padding: '0.5rem 1rem', borderRadius: 8, border: 'none', cursor: 'pointer',
+                  background: 'linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%)', color: 'white', fontWeight: 600
+                }}>Aceptar y continuar</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </Background>
   )
 }
