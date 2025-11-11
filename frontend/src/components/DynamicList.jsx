@@ -72,7 +72,7 @@ const fadeInUp = keyframes`
 // Styled Components
 const DynamicListContainer = styled.div`
   min-height: 100vh;
-  background: linear-gradient(135deg, #e9d5ff 0%, #dbeafe 30%, #a7f3d0 60%, #fef3c7 100%);
+  background: #ffffff;
   padding: 2rem 1rem;
   position: relative;
   overflow-x: hidden;
@@ -85,10 +85,10 @@ const DynamicListContainer = styled.div`
     right: 0;
     bottom: 0;
     background: 
-      radial-gradient(circle at 20% 30%, rgba(139, 92, 246, 0.15) 0%, transparent 40%),
-      radial-gradient(circle at 80% 60%, rgba(59, 130, 246, 0.15) 0%, transparent 40%),
-      radial-gradient(circle at 40% 80%, rgba(16, 185, 129, 0.15) 0%, transparent 40%),
-      radial-gradient(circle at 70% 20%, rgba(245, 158, 11, 0.15) 0%, transparent 40%);
+      radial-gradient(circle at 20% 30%, rgba(139, 92, 246, 0.08) 0%, transparent 40%),
+      radial-gradient(circle at 80% 60%, rgba(59, 130, 246, 0.08) 0%, transparent 40%),
+      radial-gradient(circle at 40% 80%, rgba(16, 185, 129, 0.08) 0%, transparent 40%),
+      radial-gradient(circle at 70% 20%, rgba(245, 158, 11, 0.08) 0%, transparent 40%);
     pointer-events: none;
     z-index: 0;
   }
