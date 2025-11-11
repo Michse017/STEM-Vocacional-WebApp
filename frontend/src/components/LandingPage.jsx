@@ -625,6 +625,7 @@ const CardButton = styled(Link)`
   border-radius: 10px;
   text-decoration: none;
   transition: all 0.3s ease;
+  cursor: pointer;
 
   &:hover {
     transform: scale(1.05);
