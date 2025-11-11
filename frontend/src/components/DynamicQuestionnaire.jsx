@@ -159,13 +159,13 @@ const AlertBox = styled.div`
 `;
 
 const MLCard = styled.div`
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.08) 100%);
-  border: 2px solid rgba(16, 185, 129, 0.5);
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  border: 2px solid #10B981;
   border-radius: 20px;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
   animation: ${slideUp} 0.6s ease 0.1s both, ${glow} 3s ease-in-out infinite;
-  box-shadow: 0 8px 32px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 8px 32px rgba(16, 185, 129, 0.4);
 `;
 
 const MLBadge = styled.div`
@@ -223,11 +223,11 @@ const FeaturesGrid = styled.div`
 `;
 
 const FeatureItem = styled.div`
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(5px);
   padding: 0.75rem;
   border-radius: 10px;
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.3);
   
   strong {
     color: #047857;
