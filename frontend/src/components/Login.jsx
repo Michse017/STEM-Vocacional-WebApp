@@ -2,6 +2,305 @@ import { useEffect, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { checkUsuario, setupCredenciales, loginConPassword } from "../api"
 import { api as adminApi } from "../admin/api"
+import styled, { keyframes } from "styled-components"
+import { GraduationCap, Eye, EyeOff, User, Lock, Loader } from "lucide-react"
+
+// Animations
+const float = keyframes`
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-20px) rotate(5deg); }
+`
+
+const spin = keyframes`
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+`
+
+const fadeIn = keyframes`
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+`
+
+// Styled Components
+const Background = styled.div`
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #faf5ff 0%, #eff6ff 50%, #f0fdf4 100%);
+  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+`
+
+const FloatingElement = styled.div`
+  position: absolute;
+  opacity: 0.15;
+  animation: ${float} ${(props) => props.duration || "6s"} ease-in-out infinite;
+  animation-delay: ${(props) => props.delay || "0s"};
+  color: ${(props) => props.color || "#8B5CF6"};
+`
+
+const Card = styled.div`
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px);
+  border-radius: 1.5rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.5);
+  padding: 2.5rem;
+  width: 100%;
+  max-width: 28rem;
+  position: relative;
+  z-index: 10;
+  animation: ${fadeIn} 0.5s ease-out;
+`
+
+const Header = styled.div`
+  text-align: center;
+  margin-bottom: 2rem;
+`
+
+const IconWrapper = styled.div`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 4rem;
+  height: 4rem;
+  background: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%);
+  border-radius: 1rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 8px 20px rgba(139, 92, 246, 0.3);
+  
+  svg {
+    color: white;
+    width: 2rem;
+    height: 2rem;
+  }
+`
+
+const Title = styled.h1`
+  font-size: 1.875rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 0.5rem;
+`
+
+const Description = styled.p`
+  color: #6b7280;
+  font-size: 0.875rem;
+`
+
+const Form = styled.form`
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+`
+
+const InputGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+`
+
+const Label = styled.label`
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+`
+
+const InputWrapper = styled.div`
+  position: relative;
+  display: flex;
+  align-items: center;
+`
+
+const Input = styled.input`
+  width: 100%;
+  padding: 0.75rem 1rem;
+  padding-left: ${(props) => (props.$hasIcon ? "3rem" : "1rem")};
+  padding-right: ${(props) => (props.$hasToggle ? "3rem" : "1rem")};
+  border: 2px solid transparent;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.8);
+  font-size: 0.875rem;
+  transition: all 0.3s ease;
+  
+  &:focus {
+    outline: none;
+    border-color: #8B5CF6;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+  }
+  
+  &::placeholder {
+    color: #9ca3af;
+  }
+`
+
+const InputIcon = styled.div`
+  position: absolute;
+  left: 1rem;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  
+  svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+`
+
+const ToggleButton = styled.button`
+  position: absolute;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s ease;
+  
+  &:hover {
+    color: #8B5CF6;
+  }
+  
+  svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+`
+
+const SubmitButton = styled.button`
+  width: 100%;
+  padding: 0.875rem;
+  background: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%);
+  color: white;
+  border: none;
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+  
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+  }
+  
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+  
+  &:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+`
+
+const SpinnerIcon = styled(Loader)`
+  animation: ${spin} 1s linear infinite;
+`
+
+const Message = styled.div`
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  animation: ${fadeIn} 0.3s ease-out;
+  
+  ${(props) =>
+    props.$type === "error" &&
+    `
+    background: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+  `}
+  
+  ${(props) =>
+    props.$type === "success" &&
+    `
+    background: rgba(16, 185, 129, 0.1);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  `}
+`
+
+const SessionBanner = styled.div`
+  background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+  color: white;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  margin-bottom: 1.5rem;
+  animation: ${fadeIn} 0.3s ease-out;
+`
+
+const SessionText = styled.p`
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.75rem;
+`
+
+const SessionButtons = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+`
+
+const SessionButton = styled.button`
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+`
+
+const Footer = styled.div`
+  margin-top: 2rem;
+  text-align: center;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+`
+
+const ModeToggleButton = styled.button`
+  padding: 0.625rem 1.5rem;
+  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(245, 158, 11, 0.4);
+  }
+`
+
+const HintText = styled.div`
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+`
 
 
 export default function Login() {
@@ -186,346 +485,307 @@ export default function Login() {
       ? 'Sesión de administrador activa en esta ventana.'
       : `Sesión activa: ${activeSession.code}.`
     return (
-      <div className="alert alert-success" style={{ marginBottom: '0.75rem' }}>
-        {msg}
-        {activeSession.type === 'admin' && (
-          <button
+      <SessionBanner>
+        <SessionText>{msg}</SessionText>
+        <SessionButtons>
+          {activeSession.type === 'admin' && (
+            <SessionButton
+              type="button"
+              onClick={() => navigate('/admin')}
+            >
+              Ir a Admin
+            </SessionButton>
+          )}
+          <SessionButton
             type="button"
-            className="btn btn-secondary"
-            style={{ marginLeft: 8 }}
             onClick={() => {
-              // Permite ir al panel admin de forma explícita, no automática
-              navigate('/admin');
+              try { sessionStorage.removeItem('usuario') } catch {}
+              try { localStorage.removeItem('admin_token') } catch {}
+              try { localStorage.removeItem('active_session') } catch {}
+              setActiveSession(null)
+              setError('')
+              setSuccess('')
             }}
           >
-            Ir a Admin
-          </button>
-        )}
-        <button type="button" className="btn btn-secondary" style={{ marginLeft: 8 }} onClick={() => {
-          try { sessionStorage.removeItem('usuario') } catch {}
-          try { localStorage.removeItem('admin_token') } catch {}
-          try { localStorage.removeItem('active_session') } catch {}
-          setActiveSession(null)
-          setError('')
-          setSuccess('')
-        }}>Cambiar usuario</button>
-      </div>
+            Cambiar usuario
+          </SessionButton>
+        </SessionButtons>
+      </SessionBanner>
     )
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "linear-gradient(135deg, #f0f9ff 0%, #ffffff 50%, #f0fdf4 100%)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "1rem",
-        position: "relative",
-      }}
-    >
-      <div className="card animate-fade-in" style={{ width: "100%", maxWidth: "28rem" }}>
-        <div style={{ textAlign: "center", marginBottom: "2rem" }}>
-          <div
-            style={{
-              width: "4rem",
-              height: "4rem",
-              background: "linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%)",
-              borderRadius: "50%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 1rem",
-              boxShadow: "0 4px 12px rgba(0, 112, 243, 0.3)",
-            }}
-          >
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
-                stroke="white"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <circle
-                cx="12"
-                cy="7"
-                r="4"
-                stroke="white"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </div>
-          <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", marginBottom: "0.5rem" }}>{isAdmin ? 'Acceso Administrador' : 'Bienvenido'}</h2>
-          <p style={{ color: "var(--text-muted-light)", fontSize: "1rem" }}>
-            {isAdmin ? 'Ingresa tus credenciales de administrador' : 'Ingresa tu código de estudiante para comenzar'}
-          </p>
-        </div>
+    <Background>
+      {/* Floating decorative elements */}
+      <FloatingElement style={{ top: "10%", left: "10%" }} duration="7s" color="#8B5CF6">
+        <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="3" />
+          <circle cx="12" cy="12" r="8" />
+          <line x1="12" y1="4" x2="12" y2="8" />
+          <line x1="12" y1="16" x2="12" y2="20" />
+          <line x1="4" y1="12" x2="8" y2="12" />
+          <line x1="16" y1="12" x2="20" y2="12" />
+        </svg>
+      </FloatingElement>
 
-  {renderActiveSessionBanner()}
-  <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-          <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: "0.875rem",
-                fontWeight: "500",
-                marginBottom: "0.5rem",
-                color: "var(--text-light)",
-              }}
-            >
-              {isAdmin ? 'Admin (código)' : 'Código de estudiante'}
-            </label>
-            <div style={{ position: "relative" }}>
-              <svg
-                style={{
-                  position: "absolute",
-                  left: "0.75rem",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: "var(--text-muted-light)",
-                  pointerEvents: "none",
-                }}
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <circle
-                  cx="12"
-                  cy="7"
-                  r="4"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <input
-                type="text"
-                required
-                value={codigoEstudiante}
-                onChange={(e) => setCodigoEstudiante(e.target.value)}
-                placeholder={isAdmin ? 'ej: admin' : 'Ej: 000123456'}
-                className="form-control"
-                style={{ paddingLeft: "3rem" }}
-              />
-            </div>
-          </div>
+      <FloatingElement style={{ top: "20%", right: "15%" }} duration="5s" delay="1s" color="#3B82F6">
+        <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="2" y1="12" x2="22" y2="12" />
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+        </svg>
+      </FloatingElement>
 
-          {isAdmin && (
-            <div>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: "0.875rem",
-                  fontWeight: "500",
-                  marginBottom: "0.5rem",
-                  color: "var(--text-light)",
-                }}
-              >
-                Contraseña
-              </label>
-              <input
-                type="password"
-                required
-                value={adminPassword}
-                onChange={(e) => setAdminPassword(e.target.value)}
-                className="form-control"
-              />
-            </div>
-          )}
+      <FloatingElement style={{ bottom: "15%", left: "15%" }} duration="6s" delay="2s" color="#10B981">
+        <svg width="55" height="55" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+        </svg>
+      </FloatingElement>
 
-          {error && (
-            <div className="alert alert-error">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
-                <line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" strokeWidth="2" />
-                <line x1="12" y1="16" x2="12.01" y2="16" stroke="currentColor" strokeWidth="2" />
-              </svg>
-              {error}
-            </div>
-          )}
-          {success && (
-            <div className="alert alert-success">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
-                <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              {success}
-            </div>
-          )}
+      <FloatingElement style={{ bottom: "20%", right: "10%" }} duration="8s" delay="0.5s" color="#F59E0B">
+        <svg width="45" height="45" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="10" />
+          <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+        </svg>
+      </FloatingElement>
 
-          {/* Submit button (for code/admin/password phases). For setup phase we render this below the fields. */}
-          {!( !isAdmin && (studentPhase === 'setup' || studentPhase === 'password')) && (
-            <button
-              type="submit"
-              disabled={loading}
-              className={`btn ${loading ? "btn-secondary" : "btn-primary"}`}
-              style={{ width: "100%" }}
-            >
-              {loading ? (
+      <Card>
+        <Header>
+          <IconWrapper>
+            <GraduationCap />
+          </IconWrapper>
+          <Title>OrientaSTEM</Title>
+          <Description>{isAdmin ? "Acceso para administradores" : "Acceso para estudiantes"}</Description>
+        </Header>
+
+        {renderActiveSessionBanner()}
+
+        {error && <Message $type="error">{error}</Message>}
+        {success && <Message $type="success">{success}</Message>}
+
+        <Form onSubmit={handleSubmit}>
+          {isAdmin ? (
+            <>
+              <InputGroup>
+                <Label>Usuario o Código</Label>
+                <InputWrapper>
+                  <InputIcon>
+                    <User />
+                  </InputIcon>
+                  <Input
+                    type="text"
+                    placeholder="Ingresa tu usuario o código"
+                    value={codigoEstudiante}
+                    onChange={(e) => setCodigoEstudiante(e.target.value)}
+                    required
+                    $hasIcon
+                  />
+                </InputWrapper>
+              </InputGroup>
+
+              <InputGroup>
+                <Label>Contraseña</Label>
+                <InputWrapper>
+                  <InputIcon>
+                    <Lock />
+                  </InputIcon>
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Ingresa tu contraseña"
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    required
+                    $hasIcon
+                    $hasToggle
+                  />
+                  <ToggleButton type="button" onClick={() => setShowPassword(!showPassword)}>
+                    {showPassword ? <EyeOff /> : <Eye />}
+                  </ToggleButton>
+                </InputWrapper>
+              </InputGroup>
+
+              <SubmitButton type="submit" disabled={loading}>
+                {loading ? (
+                  <>
+                    <SpinnerIcon size={20} />
+                    Iniciando sesión...
+                  </>
+                ) : (
+                  "Iniciar sesión"
+                )}
+              </SubmitButton>
+            </>
+          ) : (
+            <>
+              {studentPhase === "code" && (
                 <>
-                  <div className="loading-spinner"></div>
-                  {isAdmin ? 'Ingresando...' : 'Validando...'}
-                </>
-              ) : (
-                <>
-                  {isAdmin ? 'Entrar' : (studentPhase === 'code' ? 'Validar código' : 'Continuar')}
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path
-                      d="M5 12h14M12 5l7 7-7 7"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+                  <InputGroup>
+                    <Label>Código de Estudiante</Label>
+                    <InputWrapper>
+                      <InputIcon>
+                        <User />
+                      </InputIcon>
+                      <Input
+                        type="text"
+                        placeholder="Ingresa tu código de estudiante"
+                        value={codigoEstudiante}
+                        onChange={(e) => setCodigoEstudiante(e.target.value)}
+                        required
+                        $hasIcon
+                      />
+                    </InputWrapper>
+                  </InputGroup>
+
+                  <SubmitButton type="submit" disabled={loading}>
+                    {loading ? (
+                      <>
+                        <SpinnerIcon size={20} />
+                        Verificando...
+                      </>
+                    ) : (
+                      "Continuar"
+                    )}
+                  </SubmitButton>
                 </>
               )}
-            </button>
-          )}
 
-          {/* Student credential inputs depending on phase */}
-          {!isAdmin && studentPhase === 'setup' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: 6, color: 'var(--text-light)' }}>Nombre de usuario</label>
-                <input type="text" className="form-control" value={username} onChange={(e)=>setUsername(e.target.value)} placeholder="ej: test-001" />
-              </div>
-              <div style={{ position: 'relative' }}>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: 6, color: 'var(--text-light)' }}>Contraseña</label>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  className="form-control"
-                  value={studentPassword}
-                  onChange={(e)=>setStudentPassword(e.target.value)}
-                  minLength={8}
-                  maxLength={64}
-                  pattern="[A-Za-z0-9]{8,64}"
-                  title="Usa 8 a 64 caracteres: solo letras (A-Z, a-z) y números (0-9)."
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(v => !v)}
-                  style={{ position: 'absolute', right: 8, top: 36, background: 'transparent', border: 'none', color: 'var(--text-muted-light)', cursor: 'pointer' }}
-                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                >
-                  {showPassword ? 'Ocultar' : 'Mostrar'}
-                </button>
-                <div style={{ marginTop: '0.35rem', fontSize: '0.85rem', color: 'var(--text-muted-light)' }}>
-                  Requisitos: 8 a 64 caracteres. Solo letras (A–Z, a–z) y números (0–9).
-                </div>
-              </div>
-              <div style={{ position: 'relative' }}>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: 6, color: 'var(--text-light)' }}>Confirmar contraseña</label>
-                <input
-                  type={showConfirm ? 'text' : 'password'}
-                  className="form-control"
-                  value={confirm}
-                  onChange={(e)=>setConfirm(e.target.value)}
-                  minLength={8}
-                  maxLength={64}
-                  pattern="[A-Za-z0-9]{8,64}"
-                  title="Usa 8 a 64 caracteres: solo letras (A-Z, a-z) y números (0-9)."
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirm(v => !v)}
-                  style={{ position: 'absolute', right: 8, top: 36, background: 'transparent', border: 'none', color: 'var(--text-muted-light)', cursor: 'pointer' }}
-                  aria-label={showConfirm ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                >
-                  {showConfirm ? 'Ocultar' : 'Mostrar'}
-                </button>
-              </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className={`btn ${loading ? "btn-secondary" : "btn-primary"}`}
-                style={{ width: "100%" }}
-              >
-                {loading ? (
-                  <>
-                    <div className="loading-spinner"></div>
-                    {'Creando credenciales...'}
-                  </>
-                ) : (
-                  <>
-                    {'Crear credenciales'}
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path
-                        d="M5 12h14M12 5l7 7-7 7"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+              {studentPhase === "setup" && (
+                <>
+                  <InputGroup>
+                    <Label>Nombre de Usuario</Label>
+                    <InputWrapper>
+                      <InputIcon>
+                        <User />
+                      </InputIcon>
+                      <Input
+                        type="text"
+                        placeholder="Crea tu nombre de usuario"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        required
+                        $hasIcon
                       />
-                    </svg>
-                  </>
-                )}
-              </button>
-            </div>
-          )}
+                    </InputWrapper>
+                  </InputGroup>
 
-          {!isAdmin && studentPhase === 'password' && (
-            <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: 6, color: 'var(--text-light)' }}>Contraseña</label>
-              <input type="password" className="form-control" value={studentPassword} onChange={(e)=>setStudentPassword(e.target.value)} />
-              <button
-                type="submit"
-                disabled={loading}
-                className={`btn ${loading ? "btn-secondary" : "btn-primary"}`}
-                style={{ width: "100%", marginTop: '0.75rem' }}
-              >
-                {loading ? (
-                  <>
-                    <div className="loading-spinner"></div>
-                    {'Ingresando...'}
-                  </>
-                ) : (
-                  <>
-                    {'Ingresar'}
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </>
-                )}
-              </button>
-            </div>
-          )}
+                  <InputGroup>
+                    <Label>Contraseña</Label>
+                    <InputWrapper>
+                      <InputIcon>
+                        <Lock />
+                      </InputIcon>
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Crea tu contraseña (8-64 caracteres)"
+                        value={studentPassword}
+                        onChange={(e) => setStudentPassword(e.target.value)}
+                        minLength={8}
+                        maxLength={64}
+                        pattern="[A-Za-z0-9]{8,64}"
+                        required
+                        $hasIcon
+                        $hasToggle
+                      />
+                      <ToggleButton type="button" onClick={() => setShowPassword(!showPassword)}>
+                        {showPassword ? <EyeOff /> : <Eye />}
+                      </ToggleButton>
+                    </InputWrapper>
+                    <HintText>Solo letras (A–Z, a–z) y números (0–9)</HintText>
+                  </InputGroup>
 
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 8, fontSize: 14 }}>
-            {isAdmin ? (
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => { setIsAdmin(false); setError(""); setAdminPassword(""); setStudentPhase('code'); setStudentPassword(''); setUsername(''); setConfirm(''); }}
-              >
-                Soy estudiante
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => { setIsAdmin(true); setError(""); setStudentPhase('code'); setStudentPassword(''); setUsername(''); setConfirm(''); }}
-              >
-                Soy administrador
-              </button>
-            )}
-          </div>
-        </form>
-      </div>
-    </div>
+                  <InputGroup>
+                    <Label>Confirmar Contraseña</Label>
+                    <InputWrapper>
+                      <InputIcon>
+                        <Lock />
+                      </InputIcon>
+                      <Input
+                        type={showConfirm ? "text" : "password"}
+                        placeholder="Confirma tu contraseña"
+                        value={confirm}
+                        onChange={(e) => setConfirm(e.target.value)}
+                        minLength={8}
+                        maxLength={64}
+                        pattern="[A-Za-z0-9]{8,64}"
+                        required
+                        $hasIcon
+                        $hasToggle
+                      />
+                      <ToggleButton type="button" onClick={() => setShowConfirm(!showConfirm)}>
+                        {showConfirm ? <EyeOff /> : <Eye />}
+                      </ToggleButton>
+                    </InputWrapper>
+                  </InputGroup>
+
+                  <SubmitButton type="submit" disabled={loading}>
+                    {loading ? (
+                      <>
+                        <SpinnerIcon size={20} />
+                        Creando credenciales...
+                      </>
+                    ) : (
+                      "Crear credenciales"
+                    )}
+                  </SubmitButton>
+                </>
+              )}
+
+              {studentPhase === "password" && (
+                <>
+                  <InputGroup>
+                    <Label>Contraseña</Label>
+                    <InputWrapper>
+                      <InputIcon>
+                        <Lock />
+                      </InputIcon>
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Ingresa tu contraseña"
+                        value={studentPassword}
+                        onChange={(e) => setStudentPassword(e.target.value)}
+                        required
+                        $hasIcon
+                        $hasToggle
+                      />
+                      <ToggleButton type="button" onClick={() => setShowPassword(!showPassword)}>
+                        {showPassword ? <EyeOff /> : <Eye />}
+                      </ToggleButton>
+                    </InputWrapper>
+                  </InputGroup>
+
+                  <SubmitButton type="submit" disabled={loading}>
+                    {loading ? (
+                      <>
+                        <SpinnerIcon size={20} />
+                        Iniciando sesión...
+                      </>
+                    ) : (
+                      "Iniciar sesión"
+                    )}
+                  </SubmitButton>
+                </>
+              )}
+            </>
+          )}
+        </Form>
+
+        <Footer>
+          <ModeToggleButton
+            type="button"
+            onClick={() => {
+              setIsAdmin(!isAdmin)
+              setError("")
+              setAdminPassword("")
+              setStudentPhase('code')
+              setStudentPassword('')
+              setUsername('')
+              setConfirm('')
+            }}
+          >
+            {isAdmin ? "Acceso de Estudiante" : "Acceso de Admin"}
+          </ModeToggleButton>
+        </Footer>
+      </Card>
+    </Background>
   )
 }
