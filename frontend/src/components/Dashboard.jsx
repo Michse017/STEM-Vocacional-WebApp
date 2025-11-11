@@ -6,10 +6,26 @@ import { BookOpen, CheckCircle2, List, LogOut, Award, TrendingUp } from "lucide-
 
 const DashboardContainer = styled.div`
   min-height: 100vh;
-  background: linear-gradient(135deg, #faf5ff 0%, #eff6ff 50%, #f0fdf4 100%);
+  background: linear-gradient(135deg, #e9d5ff 0%, #dbeafe 30%, #a7f3d0 60%, #fef3c7 100%);
   padding: 2rem 1rem;
   position: relative;
   overflow-x: hidden;
+
+  &::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: 
+      radial-gradient(circle at 20% 30%, rgba(139, 92, 246, 0.15) 0%, transparent 40%),
+      radial-gradient(circle at 80% 60%, rgba(59, 130, 246, 0.15) 0%, transparent 40%),
+      radial-gradient(circle at 40% 80%, rgba(16, 185, 129, 0.15) 0%, transparent 40%),
+      radial-gradient(circle at 70% 20%, rgba(245, 158, 11, 0.15) 0%, transparent 40%);
+    pointer-events: none;
+    z-index: 0;
+  }
 
   @media (max-width: 768px) {
     padding: 1rem;
@@ -18,32 +34,77 @@ const DashboardContainer = styled.div`
  
 const FloatingElement = styled.div`
   position: fixed;
-  opacity: 0.15;
+  opacity: 0.4;
   pointer-events: none;
   z-index: 0;
-  filter: drop-shadow(0 0 20px currentColor);
+  filter: drop-shadow(0 0 25px currentColor);
   
   &.atom {
     top: 10%;
     right: 10%;
     animation: float 6s ease-in-out infinite, pulse 3s ease-in-out infinite;
+    color: #8B5CF6;
   }
   
   &.beaker {
     bottom: 20%;
     left: 5%;
     animation: float 8s ease-in-out infinite 1s, pulse 4s ease-in-out infinite 1s;
+    color: #3B82F6;
   }
   
   &.gear {
     top: 60%;
     right: 15%;
     animation: rotate 20s linear infinite, pulse 5s ease-in-out infinite;
+    color: #F59E0B;
+  }
+
+  &.dna {
+    top: 30%;
+    left: 8%;
+    animation: float 10s ease-in-out infinite 2s, pulse 4s ease-in-out infinite;
+    color: #10B981;
+  }
+
+  &.formula {
+    bottom: 40%;
+    right: 8%;
+    animation: float 7s ease-in-out infinite 1.5s, pulse 3.5s ease-in-out infinite;
+    color: #3B82F6;
+  }
+
+  &.microscope {
+    top: 50%;
+    left: 15%;
+    animation: float 9s ease-in-out infinite 0.5s, pulse 4.5s ease-in-out infinite;
+    color: #8B5CF6;
+  }
+
+  &.atom2 {
+    bottom: 15%;
+    right: 25%;
+    animation: float 7s ease-in-out infinite 2.5s, pulse 3s ease-in-out infinite;
+    color: #10B981;
+  }
+
+  &.calculator {
+    top: 20%;
+    left: 25%;
+    animation: float 8s ease-in-out infinite 1.8s, pulse 4s ease-in-out infinite;
+    color: #F59E0B;
+  }
+
+  &.molecule {
+    bottom: 35%;
+    left: 20%;
+    animation: float 10s ease-in-out infinite 3s, pulse 5s ease-in-out infinite;
+    color: #3B82F6;
   }
 
   @keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-20px); }
+    0%, 100% { transform: translateY(0px) scale(1); }
+    50% { transform: translateY(-25px) scale(1.05); }
   }
 
   @keyframes rotate {
@@ -52,8 +113,8 @@ const FloatingElement = styled.div`
   }
 
   @keyframes pulse {
-    0%, 100% { opacity: 0.15; }
-    50% { opacity: 0.25; }
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 0.7; }
   }
 `
 
@@ -99,12 +160,12 @@ const Subtitle = styled.p`
 `
 
 const Card = styled.div`
-  background: rgba(255, 255, 255, 0.7);
+  background: #ffffff;
   backdrop-filter: blur(10px);
   border-radius: 20px;
   padding: 2rem;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  border: 2px solid rgba(139, 92, 246, 0.2);
   transition: all 0.3s ease;
   animation: slideUp 0.6s ease-out;
 
@@ -124,9 +185,10 @@ const Card = styled.div`
 `
 
 const PrimaryCard = styled(Card)`
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%);
-  border: 2px solid rgba(139, 92, 246, 0.4);
-  margin-bottom: 2rem;
+  background: linear-gradient(135deg, #f3e8ff 0%, #dbeafe 50%, #d1fae5 100%);
+  border: 2px solid #8B5CF6;
+  margin-bottom: 1.5rem;
+  padding: 1.25rem;
   position: relative;
   overflow: hidden;
   animation: slideUp 0.6s ease-out, glow 3s ease-in-out infinite;
@@ -137,9 +199,19 @@ const PrimaryCard = styled(Card)`
     top: 0;
     left: 0;
     right: 0;
-    height: 5px;
-    background: linear-gradient(90deg, #8B5CF6 0%, #3B82F6 50%, #10B981 100%);
-    box-shadow: 0 0 20px rgba(139, 92, 246, 0.5);
+    height: 4px;
+    background: repeating-linear-gradient(
+      90deg,
+      #8B5CF6 0px,
+      #8B5CF6 25%,
+      #3B82F6 25%,
+      #3B82F6 50%,
+      #10B981 50%,
+      #10B981 75%,
+      #F59E0B 75%,
+      #F59E0B 100%
+    );
+    box-shadow: 0 0 15px rgba(139, 92, 246, 0.6);
   }
 
   &::after {
@@ -152,7 +224,7 @@ const PrimaryCard = styled(Card)`
     background: linear-gradient(
       45deg,
       transparent 30%,
-      rgba(139, 92, 246, 0.1) 50%,
+      rgba(59, 130, 246, 0.15) 50%,
       transparent 70%
     );
     animation: shimmer 3s linear infinite;
@@ -164,8 +236,8 @@ const PrimaryCard = styled(Card)`
   }
 
   @keyframes glow {
-    0%, 100% { box-shadow: 0 8px 32px rgba(139, 92, 246, 0.2); }
-    50% { box-shadow: 0 8px 40px rgba(139, 92, 246, 0.4); }
+    0%, 100% { box-shadow: 0 4px 20px rgba(139, 92, 246, 0.2); }
+    50% { box-shadow: 0 4px 25px rgba(59, 130, 246, 0.4); }
   }
 `
 
@@ -192,58 +264,58 @@ const Badge = styled.span`
 `
 
 const QuestionnaireTitle = styled.h3`
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: #1e293b;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
 `
 
 const QuestionnaireCode = styled.p`
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   color: #64748b;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 `
 
 const StatusRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
   flex-wrap: wrap;
 `
 
 const StatusBadge = styled.span`
-  padding: 0.375rem 0.75rem;
-  border-radius: 12px;
-  font-size: 0.875rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 10px;
+  font-size: 0.8rem;
   font-weight: 600;
   animation: fadeIn 0.5s ease-in;
   
   &.new {
-    background: rgba(245, 158, 11, 0.2);
-    color: #F59E0B;
+    background: #fef3c7;
+    color: #92400e;
     border: 2px solid #F59E0B;
-    box-shadow: 0 0 15px rgba(245, 158, 11, 0.3);
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
   }
   
   &.in_progress {
-    background: rgba(59, 130, 246, 0.2);
-    color: #3B82F6;
+    background: #dbeafe;
+    color: #1e40af;
     border: 2px solid #3B82F6;
-    box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.4);
     animation: fadeIn 0.5s ease-in, statusPulse 2s ease-in-out infinite;
   }
   
   &.finalized {
-    background: rgba(16, 185, 129, 0.2);
-    color: #10B981;
+    background: #d1fae5;
+    color: #065f46;
     border: 2px solid #10B981;
-    box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
   }
 
   @keyframes statusPulse {
-    0%, 100% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.3); }
-    50% { box-shadow: 0 0 25px rgba(59, 130, 246, 0.6); }
+    0%, 100% { box-shadow: 0 0 12px rgba(59, 130, 246, 0.4); }
+    50% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.7); }
   }
 `
 
@@ -255,26 +327,39 @@ const ProgressContainer = styled.div`
 const ProgressLabel = styled.div`
   display: flex;
   justify-content: space-between;
-  margin-bottom: 0.5rem;
-  font-size: 0.875rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
   color: #64748b;
 `
 
 const ProgressBar = styled.div`
   width: 100%;
-  height: 8px;
-  background: rgba(226, 232, 240, 0.5);
-  border-radius: 10px;
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 8px;
   overflow: hidden;
 `
 
 const ProgressFill = styled.div`
   height: 100%;
-  background: linear-gradient(90deg, #8B5CF6 0%, #3B82F6 50%, #10B981 100%);
-  border-radius: 10px;
-  transition: width 0.6s ease;
+  background: ${(props) => {
+    const p = props.$progress || 0;
+    if (p <= 25) return 'linear-gradient(90deg, #8B5CF6 0%, #3B82F6 100%)';
+    if (p <= 50) return 'linear-gradient(90deg, #8B5CF6 0%, #3B82F6 60%, #10B981 100%)';
+    if (p <= 75) return 'linear-gradient(90deg, #8B5CF6 0%, #3B82F6 40%, #10B981 70%, #F59E0B 100%)';
+    return 'linear-gradient(90deg, #8B5CF6 0%, #3B82F6 33%, #10B981 66%, #F59E0B 100%)';
+  }};
+  border-radius: 8px;
+  transition: width 0.6s ease, background 0.6s ease;
   width: ${(props) => props.$progress || 0}%;
-  box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+  box-shadow: 0 0 12px ${(props) => {
+    const p = props.$progress || 0;
+    if (p <= 25) return 'rgba(139, 92, 246, 0.6)';
+    if (p <= 50) return 'rgba(59, 130, 246, 0.6)';
+    if (p <= 75) return 'rgba(16, 185, 129, 0.6)';
+    return 'rgba(245, 158, 11, 0.6)';
+  }};
   position: relative;
   overflow: hidden;
 
@@ -288,7 +373,7 @@ const ProgressFill = styled.div`
     background: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(255, 255, 255, 0.3) 50%,
+      rgba(255, 255, 255, 0.4) 50%,
       transparent 100%
     );
     animation: progressShine 2s ease-in-out infinite;
@@ -377,16 +462,17 @@ const Button = styled.button`
 `
 
 const CompletionCard = styled(Card)`
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.08) 100%);
-  border: 2px solid rgba(16, 185, 129, 0.5);
-  margin-bottom: 2rem;
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  border: 2px solid #10B981;
+  margin-bottom: 1.5rem;
+  padding: 1.25rem;
   text-align: center;
   animation: slideUp 0.6s ease-out, successGlow 2s ease-in-out infinite;
-  box-shadow: 0 8px 30px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
 
   @keyframes successGlow {
-    0%, 100% { box-shadow: 0 8px 30px rgba(16, 185, 129, 0.3); }
-    50% { box-shadow: 0 8px 40px rgba(16, 185, 129, 0.5); }
+    0%, 100% { box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4); }
+    50% { box-shadow: 0 4px 30px rgba(16, 185, 129, 0.6); }
   }
 `
 
@@ -394,30 +480,31 @@ const CompletionIcon = styled.div`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 64px;
-  height: 64px;
+  width: 48px;
+  height: 48px;
   background: linear-gradient(135deg, #10B981 0%, #059669 100%);
   border-radius: 50%;
-  margin-bottom: 1rem;
-  box-shadow: 0 0 30px rgba(16, 185, 129, 0.6);
+  margin-bottom: 0.75rem;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
   animation: iconBounce 1s ease-in-out infinite;
   
   svg {
     color: white;
-    width: 32px;
-    height: 32px;
+    width: 24px;
+    height: 24px;
   }
 
   @keyframes iconBounce {
     0%, 100% { transform: translateY(0) scale(1); }
-    50% { transform: translateY(-5px) scale(1.1); }
+    50% { transform: translateY(-5px) scale(1.05); }
   }
 `
 
 const CompletionText = styled.p`
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #10B981;
+  margin: 0;
 `
 
 const ActionButtonsRow = styled.div`
@@ -433,15 +520,15 @@ const ActionButtonsRow = styled.div`
 
 const ListButton = styled(Button)`
   &.secondary {
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.08) 100%);
-    color: #3B82F6;
-    border: 2px solid rgba(59, 130, 246, 0.3);
-    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.2);
+    background: #dbeafe;
+    color: #1e40af;
+    border: 2px solid #3B82F6;
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
     
     &:hover {
-      background: linear-gradient(135deg, rgba(59, 130, 246, 0.25) 0%, rgba(59, 130, 246, 0.15) 100%);
-      border-color: #3B82F6;
-      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+      background: #bfdbfe;
+      border-color: #2563eb;
+      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5);
       transform: translateY(-2px);
     }
   }
@@ -449,15 +536,15 @@ const ListButton = styled(Button)`
 
 const LogoutButton = styled(Button)`
   &.danger {
-    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.08) 100%);
-    color: #ef4444;
-    border: 2px solid rgba(239, 68, 68, 0.3);
-    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.2);
+    background: #fee2e2;
+    color: #991b1b;
+    border: 2px solid #ef4444;
+    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
     
     &:hover {
-      background: linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(239, 68, 68, 0.15) 100%);
-      border-color: #ef4444;
-      box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+      background: #fecaca;
+      border-color: #dc2626;
+      box-shadow: 0 6px 20px rgba(239, 68, 68, 0.5);
       transform: translateY(-2px);
     }
   }
@@ -507,10 +594,10 @@ const QuestionnaireItem = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.5rem;
-  background: rgba(255, 255, 255, 0.5);
+  padding: 1rem 1.25rem;
+  background: #ffffff;
   border-radius: 12px;
-  border: 1px solid rgba(226, 232, 240, 0.5);
+  border: 2px solid #e2e8f0;
   transition: all 0.3s ease;
   position: relative;
   animation: fadeInUp 0.5s ease-out;
@@ -523,17 +610,17 @@ const QuestionnaireItem = styled.div`
     bottom: 0;
     width: 4px;
     border-radius: 12px 0 0 12px;
-    background: linear-gradient(180deg, #3B82F6 0%, #10B981 100%);
+    background: linear-gradient(180deg, #8B5CF6 0%, #3B82F6 33%, #10B981 66%, #F59E0B 100%);
     opacity: 0;
     transition: opacity 0.3s ease;
-    box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.6);
   }
 
   &:hover {
-    background: rgba(255, 255, 255, 0.9);
+    background: #f8fafc;
     border-color: #3B82F6;
     transform: translateX(8px);
-    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.2);
+    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.25);
     
     &::before {
       opacity: 1;
@@ -746,11 +833,97 @@ export default function Dashboard() {
         <svg width="100" height="100" viewBox="0 0 100 100" fill="none">
           <path
             d="M50 20 L55 35 L70 35 L58 45 L63 60 L50 50 L37 60 L42 45 L30 35 L45 35 Z"
-            fill="rgba(245, 158, 11, 0.5)"
+            fill="rgba(245, 158, 11, 0.7)"
             stroke="#F59E0B"
             strokeWidth="2"
           />
           <circle cx="50" cy="50" r="12" fill="white" stroke="#F59E0B" strokeWidth="2" />
+        </svg>
+      </FloatingElement>
+
+      <FloatingElement className="dna">
+        <svg width="80" height="120" viewBox="0 0 80 120" fill="none">
+          <path
+            d="M20 10 Q30 30 20 50 Q10 70 20 90 Q30 110 20 130"
+            stroke="#10B981"
+            strokeWidth="3"
+            fill="none"
+          />
+          <path
+            d="M60 10 Q50 30 60 50 Q70 70 60 90 Q50 110 60 130"
+            stroke="#10B981"
+            strokeWidth="3"
+            fill="none"
+          />
+          <line x1="20" y1="20" x2="60" y2="20" stroke="#10B981" strokeWidth="2" opacity="0.8" />
+          <line x1="25" y1="35" x2="55" y2="35" stroke="#10B981" strokeWidth="2" opacity="0.8" />
+          <line x1="20" y1="50" x2="60" y2="50" stroke="#10B981" strokeWidth="2" opacity="0.8" />
+          <line x1="25" y1="65" x2="55" y2="65" stroke="#10B981" strokeWidth="2" opacity="0.8" />
+          <line x1="20" y1="80" x2="60" y2="80" stroke="#10B981" strokeWidth="2" opacity="0.8" />
+        </svg>
+      </FloatingElement>
+
+      <FloatingElement className="formula">
+        <svg width="100" height="60" viewBox="0 0 100 60" fill="none">
+          <text x="10" y="35" fill="#3B82F6" fontSize="24" fontWeight="bold" fontFamily="serif">
+            E=mc²
+          </text>
+          <circle cx="80" cy="20" r="8" fill="none" stroke="#3B82F6" strokeWidth="2" />
+          <line x1="72" y1="20" x2="88" y2="20" stroke="#3B82F6" strokeWidth="2" />
+          <line x1="80" y1="12" x2="80" y2="28" stroke="#3B82F6" strokeWidth="2" />
+        </svg>
+      </FloatingElement>
+
+      <FloatingElement className="microscope">
+        <svg width="120" height="140" viewBox="0 0 120 140" fill="none">
+          <rect x="45" y="110" width="30" height="25" fill="#8B5CF6" opacity="0.5" />
+          <circle cx="60" cy="95" r="12" stroke="#8B5CF6" strokeWidth="3" fill="rgba(139, 92, 246, 0.4)" />
+          <rect x="55" y="60" width="10" height="35" fill="#8B5CF6" />
+          <circle cx="60" cy="55" r="8" fill="#8B5CF6" />
+          <path d="M60 55 L75 30 L80 35 L65 60 Z" fill="#8B5CF6" opacity="0.8" />
+          <circle cx="80" cy="25" r="10" stroke="#8B5CF6" strokeWidth="2" fill="rgba(139, 92, 246, 0.5)" />
+        </svg>
+      </FloatingElement>
+
+      <FloatingElement className="atom2">
+        <svg width="100" height="100" viewBox="0 0 100 100" fill="none">
+          <circle cx="50" cy="50" r="6" fill="#10B981" />
+          <ellipse cx="50" cy="50" rx="40" ry="15" stroke="#10B981" strokeWidth="2.5" />
+          <ellipse cx="50" cy="50" rx="15" ry="40" stroke="#10B981" strokeWidth="2.5" />
+          <circle cx="50" cy="20" r="4" fill="#10B981" />
+          <circle cx="80" cy="50" r="4" fill="#10B981" />
+          <circle cx="50" cy="80" r="4" fill="#10B981" />
+        </svg>
+      </FloatingElement>
+
+      <FloatingElement className="calculator">
+        <svg width="90" height="120" viewBox="0 0 90 120" fill="none">
+          <rect x="10" y="10" width="70" height="100" rx="8" fill="rgba(245, 158, 11, 0.4)" stroke="#F59E0B" strokeWidth="3" />
+          <rect x="20" y="20" width="50" height="20" fill="#F59E0B" opacity="0.6" />
+          <rect x="20" y="50" width="12" height="12" rx="2" fill="#F59E0B" opacity="0.8" />
+          <rect x="39" y="50" width="12" height="12" rx="2" fill="#F59E0B" opacity="0.8" />
+          <rect x="58" y="50" width="12" height="12" rx="2" fill="#F59E0B" opacity="0.8" />
+          <rect x="20" y="68" width="12" height="12" rx="2" fill="#F59E0B" opacity="0.8" />
+          <rect x="39" y="68" width="12" height="12" rx="2" fill="#F59E0B" opacity="0.8" />
+          <rect x="58" y="68" width="12" height="12" rx="2" fill="#F59E0B" opacity="0.8" />
+          <rect x="20" y="86" width="12" height="12" rx="2" fill="#F59E0B" opacity="0.8" />
+          <rect x="39" y="86" width="12" height="12" rx="2" fill="#F59E0B" opacity="0.8" />
+          <rect x="58" y="86" width="12" height="12" rx="2" fill="#F59E0B" opacity="0.8" />
+        </svg>
+      </FloatingElement>
+
+      <FloatingElement className="molecule">
+        <svg width="110" height="110" viewBox="0 0 110 110" fill="none">
+          <circle cx="30" cy="30" r="12" fill="#3B82F6" opacity="0.8" />
+          <circle cx="80" cy="30" r="12" fill="#3B82F6" opacity="0.8" />
+          <circle cx="55" cy="70" r="12" fill="#3B82F6" opacity="0.8" />
+          <circle cx="30" cy="80" r="10" fill="#10B981" opacity="0.8" />
+          <circle cx="80" cy="80" r="10" fill="#10B981" opacity="0.8" />
+          <line x1="30" y1="30" x2="80" y2="30" stroke="#3B82F6" strokeWidth="3" />
+          <line x1="30" y1="30" x2="55" y2="70" stroke="#3B82F6" strokeWidth="3" />
+          <line x1="80" y1="30" x2="55" y2="70" stroke="#3B82F6" strokeWidth="3" />
+          <line x1="55" y1="70" x2="30" y2="80" stroke="#10B981" strokeWidth="2" />
+          <line x1="55" y1="70" x2="80" y2="80" stroke="#10B981" strokeWidth="2" />
         </svg>
       </FloatingElement>
 
