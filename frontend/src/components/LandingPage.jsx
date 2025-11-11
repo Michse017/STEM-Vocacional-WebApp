@@ -190,7 +190,7 @@ export default function LandingPage() {
             <CardDescription>
               Gestión de cuestionarios: crear, editar y publicar versiones, y definir un cuestionario primario.
             </CardDescription>
-            <CardButton to="/login" color="#10B981">
+            <CardButton to="/login?admin=true" color="#10B981">
               Abrir portal
             </CardButton>
           </PublicCard>
@@ -352,7 +352,7 @@ export default function LandingPage() {
             <CTAButtonPrimary to="/login">
               Ingreso estudiantes
             </CTAButtonPrimary>
-            <CTAButtonSecondary to="/admin/login">
+            <CTAButtonSecondary to="/login?admin=true">
               Portal de administración
             </CTAButtonSecondary>
           </CTAButtonGroup>
@@ -365,7 +365,7 @@ export default function LandingPage() {
           <FooterLinks>
             <FooterLink to="/login">Acceso Estudiantes</FooterLink>
             <FooterSeparator>•</FooterSeparator>
-            <FooterLink to="/login">Acceso Administradores</FooterLink>
+            <FooterLink to="/login?admin=true">Acceso Administradores</FooterLink>
           </FooterLinks>
           <Copyright>© 2025 OrientaSTEM. Todos los derechos reservados.</Copyright>
         </FooterContent>

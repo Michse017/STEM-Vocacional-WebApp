@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { checkUsuario, setupCredenciales, loginConPassword } from "../api"
 import { api as adminApi } from "../admin/api"
 
 
 export default function Login() {
+  const [searchParams] = useSearchParams()
   const [codigoEstudiante, setCodigoEstudiante] = useState("")
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const [loading, setLoading] = useState(false)
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(searchParams.get('admin') === 'true')
   const [adminPassword, setAdminPassword] = useState("")
   // Student credential state
   const [studentPhase, setStudentPhase] = useState('code') // code | setup | password
@@ -20,6 +21,14 @@ export default function Login() {
   const [showConfirm, setShowConfirm] = useState(false)
   const navigate = useNavigate()
   const [activeSession, setActiveSession] = useState(null)
+
+  // Detecta si debe mostrar el formulario de admin desde el parámetro URL
+  useEffect(() => {
+    const adminParam = searchParams.get('admin')
+    if (adminParam === 'true') {
+      setIsAdmin(true)
+    }
+  }, [searchParams])
 
   // Si ya hay sesión activa, redirige de inmediato al destino correcto (estudiante → dashboard, admin → admin)
   useEffect(() => {
