@@ -18,26 +18,27 @@ const DashboardContainer = styled.div`
 
 const FloatingElement = styled.div`
   position: fixed;
-  opacity: 0.1;
+  opacity: 0.15;
   pointer-events: none;
   z-index: 0;
+  filter: drop-shadow(0 0 20px currentColor);
   
   &.atom {
     top: 10%;
     right: 10%;
-    animation: float 6s ease-in-out infinite;
+    animation: float 6s ease-in-out infinite, pulse 3s ease-in-out infinite;
   }
   
   &.beaker {
     bottom: 20%;
     left: 5%;
-    animation: float 8s ease-in-out infinite 1s;
+    animation: float 8s ease-in-out infinite 1s, pulse 4s ease-in-out infinite 1s;
   }
   
   &.gear {
     top: 60%;
     right: 15%;
-    animation: rotate 20s linear infinite;
+    animation: rotate 20s linear infinite, pulse 5s ease-in-out infinite;
   }
 
   @keyframes float {
@@ -48,6 +49,11 @@ const FloatingElement = styled.div`
   @keyframes rotate {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.15; }
+    50% { opacity: 0.25; }
   }
 `
 
@@ -118,11 +124,12 @@ const Card = styled.div`
 `
 
 const PrimaryCard = styled(Card)`
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%);
-  border: 2px solid rgba(139, 92, 246, 0.3);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%);
+  border: 2px solid rgba(139, 92, 246, 0.4);
   margin-bottom: 2rem;
   position: relative;
   overflow: hidden;
+  animation: slideUp 0.6s ease-out, glow 3s ease-in-out infinite;
 
   &::before {
     content: '';
@@ -130,8 +137,35 @@ const PrimaryCard = styled(Card)`
     top: 0;
     left: 0;
     right: 0;
-    height: 4px;
-    background: linear-gradient(90deg, #8B5CF6 0%, #3B82F6 100%);
+    height: 5px;
+    background: linear-gradient(90deg, #8B5CF6 0%, #3B82F6 50%, #10B981 100%);
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.5);
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+      45deg,
+      transparent 30%,
+      rgba(139, 92, 246, 0.1) 50%,
+      transparent 70%
+    );
+    animation: shimmer 3s linear infinite;
+  }
+
+  @keyframes shimmer {
+    0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+    100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+  }
+
+  @keyframes glow {
+    0%, 100% { box-shadow: 0 8px 32px rgba(139, 92, 246, 0.2); }
+    50% { box-shadow: 0 8px 40px rgba(139, 92, 246, 0.4); }
   }
 `
 
@@ -146,6 +180,15 @@ const Badge = styled.span`
   font-size: 0.875rem;
   font-weight: 600;
   margin-bottom: 1rem;
+  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+  animation: badgePulse 2s ease-in-out infinite;
+  position: relative;
+  z-index: 1;
+
+  @keyframes badgePulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4); }
+    50% { transform: scale(1.05); box-shadow: 0 6px 20px rgba(139, 92, 246, 0.6); }
+  }
 `
 
 const QuestionnaireTitle = styled.h3`
@@ -174,23 +217,33 @@ const StatusBadge = styled.span`
   border-radius: 12px;
   font-size: 0.875rem;
   font-weight: 600;
+  animation: fadeIn 0.5s ease-in;
   
   &.new {
-    background: rgba(245, 158, 11, 0.15);
+    background: rgba(245, 158, 11, 0.2);
     color: #F59E0B;
-    border: 1px solid rgba(245, 158, 11, 0.3);
+    border: 2px solid #F59E0B;
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.3);
   }
   
   &.in_progress {
-    background: rgba(59, 130, 246, 0.15);
+    background: rgba(59, 130, 246, 0.2);
     color: #3B82F6;
-    border: 1px solid rgba(59, 130, 246, 0.3);
+    border: 2px solid #3B82F6;
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+    animation: fadeIn 0.5s ease-in, statusPulse 2s ease-in-out infinite;
   }
   
   &.finalized {
-    background: rgba(16, 185, 129, 0.15);
+    background: rgba(16, 185, 129, 0.2);
     color: #10B981;
-    border: 1px solid rgba(16, 185, 129, 0.3);
+    border: 2px solid #10B981;
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+  }
+
+  @keyframes statusPulse {
+    0%, 100% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.3); }
+    50% { box-shadow: 0 0 25px rgba(59, 130, 246, 0.6); }
   }
 `
 
@@ -221,6 +274,30 @@ const ProgressFill = styled.div`
   border-radius: 10px;
   transition: width 0.6s ease;
   width: ${(props) => props.$progress || 0}%;
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+  position: relative;
+  overflow: hidden;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.3) 50%,
+      transparent 100%
+    );
+    animation: progressShine 2s ease-in-out infinite;
+  }
+
+  @keyframes progressShine {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(200%); }
+  }
 `
 
 const Button = styled.button`
@@ -234,14 +311,39 @@ const Button = styled.button`
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
   
   &.primary {
     background: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%);
     color: white;
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+    
+    &::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      transform: translate(-50%, -50%);
+      transition: width 0.6s, height 0.6s;
+    }
     
     &:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 20px rgba(139, 92, 246, 0.3);
+      transform: translateY(-3px);
+      box-shadow: 0 8px 25px rgba(139, 92, 246, 0.6);
+      
+      &::before {
+        width: 300px;
+        height: 300px;
+      }
+    }
+
+    &:active {
+      transform: translateY(-1px);
     }
   }
   
@@ -275,10 +377,17 @@ const Button = styled.button`
 `
 
 const CompletionCard = styled(Card)`
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
-  border: 2px solid rgba(16, 185, 129, 0.3);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.08) 100%);
+  border: 2px solid rgba(16, 185, 129, 0.5);
   margin-bottom: 2rem;
   text-align: center;
+  animation: slideUp 0.6s ease-out, successGlow 2s ease-in-out infinite;
+  box-shadow: 0 8px 30px rgba(16, 185, 129, 0.3);
+
+  @keyframes successGlow {
+    0%, 100% { box-shadow: 0 8px 30px rgba(16, 185, 129, 0.3); }
+    50% { box-shadow: 0 8px 40px rgba(16, 185, 129, 0.5); }
+  }
 `
 
 const CompletionIcon = styled.div`
@@ -290,11 +399,18 @@ const CompletionIcon = styled.div`
   background: linear-gradient(135deg, #10B981 0%, #059669 100%);
   border-radius: 50%;
   margin-bottom: 1rem;
+  box-shadow: 0 0 30px rgba(16, 185, 129, 0.6);
+  animation: iconBounce 1s ease-in-out infinite;
   
   svg {
     color: white;
     width: 32px;
     height: 32px;
+  }
+
+  @keyframes iconBounce {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-5px) scale(1.1); }
   }
 `
 
@@ -317,26 +433,32 @@ const ActionButtonsRow = styled.div`
 
 const ListButton = styled(Button)`
   &.secondary {
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%);
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.08) 100%);
     color: #3B82F6;
-    border: 1px solid rgba(59, 130, 246, 0.2);
+    border: 2px solid rgba(59, 130, 246, 0.3);
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.2);
     
     &:hover {
-      background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0.1) 100%);
-      border-color: rgba(59, 130, 246, 0.3);
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.25) 0%, rgba(59, 130, 246, 0.15) 100%);
+      border-color: #3B82F6;
+      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+      transform: translateY(-2px);
     }
   }
 `
 
 const LogoutButton = styled(Button)`
   &.danger {
-    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%);
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.08) 100%);
     color: #ef4444;
-    border: 1px solid rgba(239, 68, 68, 0.2);
+    border: 2px solid rgba(239, 68, 68, 0.3);
+    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.2);
     
     &:hover {
-      background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(239, 68, 68, 0.1) 100%);
-      border-color: rgba(239, 68, 68, 0.3);
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(239, 68, 68, 0.15) 100%);
+      border-color: #ef4444;
+      box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+      transform: translateY(-2px);
     }
   }
 `
@@ -349,15 +471,29 @@ const SectionTitle = styled.h2`
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  animation: slideInLeft 0.6s ease-out;
   
   svg {
     color: #3B82F6;
+    filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.5));
+    animation: iconFloat 3s ease-in-out infinite;
+  }
+
+  @keyframes slideInLeft {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes iconFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
   }
 `
 
 const HistorySectionTitle = styled(SectionTitle)`
   svg {
     color: #10B981;
+    filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.5));
   }
 `
 
@@ -377,6 +513,7 @@ const QuestionnaireItem = styled.div`
   border: 1px solid rgba(226, 232, 240, 0.5);
   transition: all 0.3s ease;
   position: relative;
+  animation: fadeInUp 0.5s ease-out;
 
   &::before {
     content: '';
@@ -389,12 +526,14 @@ const QuestionnaireItem = styled.div`
     background: linear-gradient(180deg, #3B82F6 0%, #10B981 100%);
     opacity: 0;
     transition: opacity 0.3s ease;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
   }
 
   &:hover {
-    background: rgba(255, 255, 255, 0.8);
-    border-color: rgba(59, 130, 246, 0.3);
-    transform: translateX(4px);
+    background: rgba(255, 255, 255, 0.9);
+    border-color: #3B82F6;
+    transform: translateX(8px);
+    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.2);
     
     &::before {
       opacity: 1;
@@ -405,6 +544,11 @@ const QuestionnaireItem = styled.div`
     flex-direction: column;
     align-items: stretch;
     gap: 1rem;
+  }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 `
 
@@ -428,17 +572,25 @@ const EmptyState = styled.div`
   text-align: center;
   padding: 3rem 1rem;
   color: #64748b;
+  animation: fadeIn 0.6s ease-in;
   
   svg {
     width: 64px;
     height: 64px;
     margin-bottom: 1rem;
-    opacity: 0.3;
+    opacity: 0.4;
     color: #F59E0B;
+    filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.3));
+    animation: emptyStateFloat 3s ease-in-out infinite;
   }
   
   p {
     font-size: 1rem;
+  }
+
+  @keyframes emptyStateFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
   }
 `
 
@@ -452,10 +604,13 @@ const LoadingSpinner = styled.div`
     content: '';
     width: 48px;
     height: 48px;
-    border: 4px solid rgba(139, 92, 246, 0.1);
+    border: 4px solid rgba(139, 92, 246, 0.2);
     border-top-color: #8B5CF6;
+    border-right-color: #3B82F6;
+    border-bottom-color: #10B981;
     border-radius: 50%;
     animation: spin 1s linear infinite;
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
   }
   
   @keyframes spin {
