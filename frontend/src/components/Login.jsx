@@ -277,7 +277,7 @@ export default function Login() {
                 color: "var(--text-light)",
               }}
             >
-              {isAdmin ? 'Usuario (código)' : 'Código de estudiante'}
+              {isAdmin ? 'Admin (código)' : 'Código de estudiante'}
             </label>
             <div style={{ position: "relative" }}>
               <svg
