@@ -185,8 +185,8 @@ const Card = styled.div`
 `
 
 const PrimaryCard = styled(Card)`
-  background: linear-gradient(135deg, #f3e8ff 0%, #dbeafe 50%, #d1fae5 100%);
-  border: 2px solid #8B5CF6;
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
   margin-bottom: 1.5rem;
   padding: 1.25rem;
   position: relative;
@@ -224,7 +224,7 @@ const PrimaryCard = styled(Card)`
     background: linear-gradient(
       45deg,
       transparent 30%,
-      rgba(59, 130, 246, 0.15) 50%,
+      rgba(59, 130, 246, 0.05) 50%,
       transparent 70%
     );
     animation: shimmer 3s linear infinite;
@@ -236,8 +236,8 @@ const PrimaryCard = styled(Card)`
   }
 
   @keyframes glow {
-    0%, 100% { box-shadow: 0 4px 20px rgba(139, 92, 246, 0.2); }
-    50% { box-shadow: 0 4px 25px rgba(59, 130, 246, 0.4); }
+    0%, 100% { box-shadow: 0 4px 20px rgba(139, 92, 246, 0.15); }
+    50% { box-shadow: 0 4px 25px rgba(59, 130, 246, 0.25); }
   }
 `
 
