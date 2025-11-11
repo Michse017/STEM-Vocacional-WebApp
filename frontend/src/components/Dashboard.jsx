@@ -15,7 +15,7 @@ const DashboardContainer = styled.div`
     padding: 1rem;
   }
 `
-
+ 
 const FloatingElement = styled.div`
   position: fixed;
   opacity: 0.15;
