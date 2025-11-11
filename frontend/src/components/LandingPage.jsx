@@ -190,7 +190,7 @@ export default function LandingPage() {
             <CardDescription>
               Gestión de cuestionarios: crear, editar y publicar versiones, y definir un cuestionario primario.
             </CardDescription>
-            <CardButton to="login" color="#10B981">
+            <CardButton to="/login" color="#10B981">
               Abrir portal
             </CardButton>
           </PublicCard>
@@ -565,6 +565,7 @@ const PublicCard = styled.div`
         : "linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(245, 158, 11, 0.05) 100%)"};
     opacity: 0;
     transition: opacity 0.4s ease;
+    pointer-events: none;
   }
 
   &:hover {
