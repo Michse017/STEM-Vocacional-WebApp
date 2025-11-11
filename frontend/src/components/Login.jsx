@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom"
 import { checkUsuario, setupCredenciales, loginConPassword } from "../api"
 import { api as adminApi } from "../admin/api"
 import styled, { keyframes } from "styled-components"
-import { GraduationCap, Eye, EyeOff, User, Lock, Loader } from "lucide-react"
+import { GraduationCap, Eye, EyeOff, User, Lock, Loader, ArrowLeft } from "lucide-react"
 
 // Animations
 const float = keyframes`
@@ -302,6 +302,34 @@ const HintText = styled.div`
   color: #6b7280;
 `
 
+const BackButton = styled.button`
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(139, 92, 246, 0.1);
+  color: #8B5CF6;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    background: rgba(139, 92, 246, 0.2);
+    transform: translateX(-3px);
+  }
+  
+  svg {
+    width: 1rem;
+    height: 1rem;
+  }
+`
+
 
 export default function Login() {
   const [searchParams] = useSearchParams()
@@ -550,6 +578,11 @@ export default function Login() {
       </FloatingElement>
 
       <Card>
+        <BackButton type="button" onClick={() => navigate('/')}>
+          <ArrowLeft />
+          Volver al inicio
+        </BackButton>
+
         <Header>
           <IconWrapper>
             <GraduationCap />
