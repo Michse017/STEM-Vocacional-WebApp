@@ -554,7 +554,7 @@ export default function Login() {
           <IconWrapper>
             <GraduationCap />
           </IconWrapper>
-          <Title>OrientaSTEM</Title>
+          <Title>STEM</Title>
           <Description>{isAdmin ? "Acceso para administradores" : "Acceso para estudiantes"}</Description>
         </Header>
 
@@ -567,14 +567,14 @@ export default function Login() {
           {isAdmin ? (
             <>
               <InputGroup>
-                <Label>Usuario o Código</Label>
+                <Label>Admin (Código)</Label>
                 <InputWrapper>
                   <InputIcon>
                     <User />
                   </InputIcon>
                   <Input
                     type="text"
-                    placeholder="Ingresa tu usuario o código"
+                    placeholder="Ingresa tu código"
                     value={codigoEstudiante}
                     onChange={(e) => setCodigoEstudiante(e.target.value)}
                     required
