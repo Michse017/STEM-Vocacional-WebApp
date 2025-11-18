@@ -1084,6 +1084,9 @@ def list_responses_wide(version_id: int):
 					row['ml_label'] = None
 					row['ml_status'] = None
 					row['ml_reason'] = None
+				# UX comment if present (generic: just attach if key exists)
+				if isinstance(sc, dict) and 'ux_comment' in sc:
+					row['ux_comment'] = sc.get('ux_comment')
 			except Exception:
 				row['ml_prob'] = None
 				row['ml_decision'] = None

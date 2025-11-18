@@ -12,6 +12,8 @@ from database.controller import engine
 from database.models import Base
 from database.models import ensure_user_schema
 from database.dynamic_models import ensure_dynamic_schema
+from database.dynamic_models import Questionnaire, QuestionnaireVersion, Section, Question, Option
+from sqlalchemy.orm import Session
 from .routes.usuario_routes import usuario_bp
 from .routes.dynamic_questionnaire_routes import dynamic_questionnaire_bp
 from .routes.admin_dynamic_routes import admin_dynamic_bp
@@ -108,6 +110,15 @@ def create_app():
                 except Exception:
                     pass
                 print(f"[startup] ensure_user_schema skipped with error: {e}")
+            # Ensure usability survey questionnaire exists (hardcoded, hidden from listings)
+            try:
+                _ensure_ux_survey()
+            except Exception as e:
+                try:
+                    import traceback; traceback.print_exc()
+                except Exception:
+                    pass
+                print(f"[startup] ensure_ux_survey skipped with error: {e}")
             print("Tablas de la base de datos verificadas/creadas.")
         except Exception as db_error:
             print(f" Error al conectar con la base de datos: {db_error}")
@@ -115,6 +126,60 @@ def create_app():
             print(" Verifica la conexión a internet y la configuración de Azure SQL Server.")
 
     return app
+
+def _ensure_ux_survey():
+    """Crear cuestionario 'ux_survey' (Encuesta de usabilidad) si no existe.
+
+    Implementado como cuestionario dinámico oculto para reutilizar el mismo
+    almacenamiento sin cambiar el esquema. Una sola versión publicada con
+    10 preguntas de escala Likert (1-5) usando opciones explícitas.
+    """
+    likert = [
+        ("5", "Muy de acuerdo"),
+        ("4", "De acuerdo"),
+        ("3", "No sé"),
+        ("2", "En desacuerdo"),
+        ("1", "Muy en desacuerdo"),
+    ]
+    # Preguntas (texto exacto del requerimiento). Guardar código estable.
+    questions = [
+        ("ux_q1", "Creo que me gustaría usar este sistema de forma frecuente"),
+        ("ux_q2", "El sistema es innecesariamente complejo"),
+        ("ux_q3", "Creo que el sistema fue fácil de usar"),
+        ("ux_q4", "Creo que necesito el apoyo de un técnico para usar el sistema"),
+        ("ux_q5", "Muchas funciones del sistema fueron bien integradas"),
+        ("ux_q6", "Pienso que había mucha inconsistencia en el sistema"),
+        ("ux_q7", "Pienso que la mayoría de personas aprenderán a usar este sistema muy rápido"),
+        ("ux_q8", "Pienso que el sistema fue incómodo de usar"),
+        ("ux_q9", "Me sentí seguro usando este sistema"),
+        ("ux_q10", "Necesité aprender muchas cosas antes de entender el sistema"),
+    ]
+    with Session(engine) as s:
+        existing = s.query(Questionnaire).filter_by(code="ux_survey").first()
+        if existing:
+            return  # Ya existe
+        q = Questionnaire(code="ux_survey", title="Encuesta de Usabilidad STEM", description="Encuesta de usabilidad de la herramienta STEM", status="active", is_primary=False)
+        s.add(q)
+        s.flush()
+        v = QuestionnaireVersion(questionnaire_id=q.id, version_number=1, status="published", metadata_json={"kind": "ux_survey", "hardcoded": True})
+        s.add(v)
+        s.flush()
+        sec = Section(questionnaire_version_id=v.id, title="Usabilidad", description="Bloque único de 10 afirmaciones SUS adaptadas", order=1)
+        s.add(sec)
+        s.flush()
+        order_counter = 1
+        for code, text in questions:
+            qu = Question(section_id=sec.id, code=code, text=text, type="choice", required=True, order=order_counter)
+            s.add(qu)
+            s.flush()
+            # Opciones Likert
+            opt_order = 1
+            for value, label in likert:
+                s.add(Option(question_id=qu.id, value=value, label=label, order=opt_order))
+                opt_order += 1
+            order_counter += 1
+        s.commit()
+        print("[ensure_ux_survey] Questionnaire 'ux_survey' creado con versión publicada.")
 
 # --- Punto de Entrada para Ejecución ---
 if __name__ == '__main__':

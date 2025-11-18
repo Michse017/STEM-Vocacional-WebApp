@@ -8,6 +8,7 @@ import { QuestionnairesGrid } from './components/QuestionnairesGrid';
 import { QuestionnairePanel } from './components/QuestionnairePanel';
 import { UsersPanel } from './components/UsersPanel';
 import { UsersTable } from './components/UsersTable';
+import { UxSurveyResultsTable } from './components/UxSurveyResultsTable';
 import { Segmented } from './components/ui/Segmented';
 
 // Animations
@@ -338,6 +339,9 @@ export default function AdminApp() {
                 <UsersPanel />
               </Card>
               <UsersModuleTable />
+              <Card>
+                <UxSurveyResultsTable />
+              </Card>
             </>
           )}
         </MainArea>

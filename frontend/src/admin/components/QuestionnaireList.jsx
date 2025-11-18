@@ -9,7 +9,12 @@ export function QuestionnaireList({ onSelectVersion, refreshSignal, onError, onI
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
-    try { const d = await api('/admin/questionnaires'); setItems(d.items || []); }
+    try {
+      const d = await api('/admin/questionnaires');
+      const raw = d.items || [];
+      // Excluir ux_survey de la lista administrativa general
+      setItems(raw.filter(q => q.code !== 'ux_survey'));
+    }
     catch (e) { setError(e.message); onError?.(e.message); }
     finally { setLoading(false); }
   }, [onError]);

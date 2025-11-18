@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { getDynamicQuestionnaire, getMyDynamicStatus, saveDynamicResponse, finalizeDynamicResponse, saveDynamicResponseKeepAlive, getPrefillValues } from "../api";
+import { getDynamicQuestionnaire, getMyDynamicStatus, saveDynamicResponse, finalizeDynamicResponse, saveDynamicResponseKeepAlive, getPrefillValues, getUxSurveyStatus } from "../api";
+import UxSurveyModal from './UxSurveyModal';
 import styled, { keyframes } from "styled-components";
 import { ArrowLeft, ChevronRight, CheckCircle2, XCircle, AlertCircle, Save, Check, Award } from "lucide-react";
 
@@ -790,6 +791,8 @@ export default function DynamicQuestionnaire() {
   const [busyFinalize, setBusyFinalize] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({}); // { [qcode]: [messages] }
   const [mlResult, setMlResult] = useState(null);
+  const [uxSurveyOpen, setUxSurveyOpen] = useState(false);
+  const [uxSurveyDone, setUxSurveyDone] = useState(false);
 
   // Helper to coerce raw answers from backend into proper JS types based on questionnaire structure
   const coerceAnswers = (structure, raw) => {
@@ -833,6 +836,16 @@ export default function DynamicQuestionnaire() {
             if (mine.answers) setAnswers(coerceAnswers(res?.questionnaire, mine.answers));
             // Persisted ML summary for read-only view after reingress
             if (mine.ml) setMlResult(mine.ml);
+            // If backend prompts for UX survey, fetch status to show modal if pending
+            if (mine.ux_survey_prompt) {
+              try {
+                const st = await getUxSurveyStatus(usuario.codigo_estudiante);
+                if (mounted) {
+                  if (!st?.done) setUxSurveyOpen(true);
+                  setUxSurveyDone(!!st?.done);
+                }
+              } catch (_) { /* ignore */ }
+            }
           }
           // Prefill for unanswered fields using values from other questionnaires
           try {
@@ -1028,6 +1041,15 @@ export default function DynamicQuestionnaire() {
       const ml = res?.ml || null;
       if (ml) setMlResult(ml);
       setSubmitMsg("Cuestionario finalizado.");
+      if (res?.ux_survey_prompt && usuario?.codigo_estudiante) {
+        try {
+          const st = await getUxSurveyStatus(usuario.codigo_estudiante);
+          if (!st?.done) {
+            setUxSurveyOpen(true);
+            setUxSurveyDone(false);
+          }
+        } catch (_) { /* ignore */ }
+      }
     } catch (e) {
       setSubmitErr(e.message || "No se pudo finalizar.");
     } finally {
@@ -1280,6 +1302,13 @@ export default function DynamicQuestionnaire() {
           </ActionBar>
         </form>
       </ContentWrapper>
+      {/* Modal encuesta UX */}
+      <UxSurveyModal
+        open={uxSurveyOpen}
+        userCode={usuario?.codigo_estudiante}
+        onClose={() => { setUxSurveyOpen(false); setUxSurveyDone(true); }}
+        onSubmitted={() => { setUxSurveyOpen(false); setUxSurveyDone(true); }}
+      />
     </QuestionnaireContainer>
   );
 }

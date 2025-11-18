@@ -60,6 +60,29 @@ export function ResponsesViewer({ versionId }) {
 
   const allColumns = useMemo(() => [...baseColumns, ...columns], [baseColumns, columns]);
 
+  // CSV export (base + dynamic question codes)
+  const exportCsv = () => {
+    if (!rows.length) return;
+    const header = allColumns;
+    const lines = [header.join(',')];
+    rows.forEach(r => {
+      const cols = header.map(c => {
+        const v = r[c];
+        if (Array.isArray(v)) return '"' + v.join('|').replace(/"/g,'""') + '"';
+        if (v === null || v === undefined) return '';
+        const s = String(v);
+        if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g,'""') + '"';
+        return s;
+      });
+      lines.push(cols.join(','));
+    });
+    const blob = new Blob([lines.join('\n')], { type:'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `version_${versionId}_responses.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const triggerRecompute = async (dryRun = false) => {
@@ -102,6 +125,7 @@ export function ResponsesViewer({ versionId }) {
           </select>
           <button className='btn btn-secondary btn-sm' onClick={() => load(1)} disabled={loading}>Aplicar</button>
           <div style={{ width:1, height:22, background:'#e2e8f0' }} />
+          <button className='btn btn-secondary btn-sm' onClick={exportCsv} disabled={loading || !rows.length}>Exportar CSV</button>
           <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
             <input type='checkbox' checked={recOnlyFinalized} onChange={e => setRecOnlyFinalized(e.target.checked)} /> Sólo finalizados
           </label>
