@@ -124,6 +124,24 @@ export const saveDynamicResponseKeepAlive = async (code, payload) => {
   }
 };
 
+// --- UX Survey (usabilidad) ---
+
+// Obtiene estado y estructura (si pendiente) de la encuesta de usabilidad.
+export const getUxSurveyStatus = async (userCode) => {
+  const res = await fetch(`${API_BASE_URL}/dynamic/ux-survey/status?user_code=${encodeURIComponent(userCode || '')}`, { method: 'GET' });
+  return handleResponse(res);
+};
+
+// Envía respuestas de la encuesta de usabilidad.
+export const submitUxSurvey = async ({ userCode, answers, comment }) => {
+  const res = await fetch(`${API_BASE_URL}/dynamic/ux-survey/submit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_code: userCode || '', answers: answers || {}, comment: comment || '' })
+  });
+  return handleResponse(res);
+};
+
 // --- Student Auth (code-first, admin pre-registered) ---
 
 export const checkUsuario = async (codigoEstudiante) => {

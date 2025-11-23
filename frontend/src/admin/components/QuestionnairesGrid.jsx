@@ -14,7 +14,13 @@ export function QuestionnairesGrid({ onOpenPanel }) {
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
-    try { const d = await api('/admin/questionnaires'); setItems(d.items || []); }
+    try {
+      const d = await api('/admin/questionnaires');
+      const raw = d.items || [];
+      // Filtrar encuesta de usabilidad para que no aparezca en grids generales
+      const filtered = raw.filter(q => q.code !== 'ux_survey');
+      setItems(filtered);
+    }
     catch (e) { setError(e.message); }
     finally { setLoading(false); }
   }, []);

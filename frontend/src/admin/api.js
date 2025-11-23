@@ -78,3 +78,16 @@ export async function recomputeVersionMl(versionId, { onlyFinalized = true, limi
     body: JSON.stringify(body)
   });
 }
+
+// --- UX Survey Helpers ---
+
+export async function listQuestionnairesAdmin() {
+  return api('/admin/questionnaires');
+}
+
+export async function listResponsesWide(versionId, { page = 1, pageSize = 50, userCode = '', status = '' } = {}) {
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  if (userCode) params.set('user_code', userCode);
+  if (status) params.set('status', status);
+  return api(`/admin/versions/${encodeURIComponent(versionId)}/responses/wide?${params.toString()}`);
+}

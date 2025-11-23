@@ -14,6 +14,7 @@ from database.controller import get_usuario_by_codigo
 from sqlalchemy import desc
 from sqlalchemy.sql import func
 from backend.services.ml_inference_service import try_infer_and_store
+from backend.extensions import limiter
 
 dynamic_questionnaire_bp = Blueprint("dynamic_questionnaire", __name__)
 
@@ -83,7 +84,8 @@ def dynamic_overview():
 			.all()
 		)
 		for q in qs:
-			if getattr(q, 'is_primary', False):
+			# Ocultar cuestionario primario y encuesta de usabilidad
+			if getattr(q, 'is_primary', False) or q.code == 'ux_survey':
 				continue
 			versions_sorted = sorted(q.versions, key=lambda v: v.version_number, reverse=True)
 			target_version = next((v for v in versions_sorted if v.status == "published"), None)
@@ -135,7 +137,7 @@ def list_questionnaires():
 		data = []
 		for q in qs:
 			# Ocultar el cuestionario principal del listado público
-			if getattr(q, 'is_primary', False):
+			if getattr(q, 'is_primary', False) or q.code == 'ux_survey':
 				continue
 			has_published = any(v.status == "published" for v in q.versions)
 			if not has_published:
@@ -286,11 +288,27 @@ def get_my_dynamic_status(code: str):
 				ml_payload = resp.summary_cache.get("ml")
 			except Exception:
 				ml_payload = None
-		return jsonify({
+		resp_payload = {
 			"status": assign.status,
 			"answers": answers,
 			"ml": ml_payload
-		})
+		}
+		# Si el cuestionario es primario y está finalizado, verificar encuesta UX
+		try:
+			if assign.status == 'finalized':
+				q_primary = s.query(Questionnaire).filter_by(code=code).first()
+				if q_primary and getattr(q_primary, 'is_primary', False):
+					ux_q = s.query(Questionnaire).filter_by(code='ux_survey').first()
+					if ux_q:
+						vers_sorted = sorted(ux_q.versions, key=lambda v: v.version_number, reverse=True)
+						ux_pub = next((v for v in vers_sorted if v.status=='published'), vers_sorted[0] if vers_sorted else None)
+						if ux_pub:
+							assign_ux = s.query(QuestionnaireAssignment).filter_by(user_code=user_code, questionnaire_version_id=ux_pub.id).first()
+							if not (assign_ux and assign_ux.status=='finalized'):
+								resp_payload['ux_survey_prompt'] = True
+		except Exception:
+			pass
+		return jsonify(resp_payload)
 
 @dynamic_questionnaire_bp.route("/dynamic/questionnaires/<code>/save", methods=["POST"])
 def save_response(code: str):
@@ -407,13 +425,124 @@ def finalize_response(code: str):
 		resp.finalized_at = func.now()
 		resp.submitted_at = func.now()
 		s.commit()
-		# Include ml summary in response payload when available
+		# Include ml summary
 		payload = {"message": "finalized", "assignment_id": assign.id, "response_id": resp.id}
 		if isinstance(getattr(resp, "summary_cache", None), dict) and resp.summary_cache.get("ml"):
 			payload["ml"] = resp.summary_cache.get("ml")
 		else:
 			payload["ml"] = ml_summary if isinstance(ml_summary, dict) else None
+		# Trigger encuesta UX si corresponde (primario y no contestada)
+		try:
+			if getattr(q, 'is_primary', False):
+				ux_q = s.query(Questionnaire).filter_by(code='ux_survey').first()
+				if ux_q:
+					vers_sorted = sorted(ux_q.versions, key=lambda v: v.version_number, reverse=True)
+					ux_pub = next((v for v in vers_sorted if v.status=='published'), vers_sorted[0] if vers_sorted else None)
+					if ux_pub:
+						assign_ux = s.query(QuestionnaireAssignment).filter_by(user_code=user_code, questionnaire_version_id=ux_pub.id).first()
+						if not (assign_ux and assign_ux.status=='finalized'):
+							payload['ux_survey_prompt'] = True
+		except Exception:
+			pass
 		return jsonify(payload)
+
+# --- Encuesta UX: estado y envío ---
+@dynamic_questionnaire_bp.route('/dynamic/ux-survey/status', methods=['GET'])
+@limiter.limit('20 per minute')
+def ux_survey_status():
+	if not _feature_enabled():
+		return jsonify({'error': 'disabled'}), 404
+	user_code = (request.args.get('user_code') or '').strip() or None
+	if not user_code:
+		return jsonify({'error': 'missing_user_code'}), 400
+	with Session(engine) as s:
+		ux_q = s.query(Questionnaire).filter_by(code='ux_survey').first()
+		if not ux_q:
+			return jsonify({'error': 'not_configured'}), 404
+		vers_sorted = sorted(ux_q.versions, key=lambda v: v.version_number, reverse=True)
+		ux_pub = next((v for v in vers_sorted if v.status=='published'), vers_sorted[0] if vers_sorted else None)
+		if not ux_pub:
+			return jsonify({'error': 'no_version'}), 409
+		assign = s.query(QuestionnaireAssignment).filter_by(user_code=user_code, questionnaire_version_id=ux_pub.id).first()
+		if assign and assign.status=='finalized':
+			return jsonify({'done': True})
+		# build estructura ligera
+		questions_payload = []
+		for sec in sorted(ux_pub.sections, key=lambda sc: sc.order):
+			for qu in sorted(sec.questions, key=lambda qq: qq.order):
+				questions_payload.append({
+					'code': qu.code,
+					'text': qu.text,
+					'options': [ {'value': op.value, 'label': op.label} for op in sorted(qu.options, key=lambda o: o.order) ]
+				})
+		return jsonify({'done': False, 'structure': {'code': 'ux_survey', 'title': ux_q.title, 'version_id': ux_pub.id, 'questions': questions_payload}})
+
+@dynamic_questionnaire_bp.route('/dynamic/ux-survey/submit', methods=['POST'])
+@limiter.limit('5 per minute')
+def ux_survey_submit():
+	if not _feature_enabled():
+		return jsonify({'error': 'disabled'}), 404
+	payload = request.get_json(force=True, silent=True) or {}
+	comment = (payload.get("comment") or "").strip()[:2000]  # optional comentario/recomendación
+	user_code = (payload.get('user_code') or '').strip() or None
+	answers = payload.get('answers') or {}
+	if not user_code or not isinstance(answers, dict):
+		return jsonify({'error': 'invalid_payload'}), 400
+	required_codes = [f'ux_q{i}' for i in range(1, 11)]
+	missing = [c for c in required_codes if c not in answers]
+	invalid = {c: answers.get(c) for c in required_codes if c in answers and str(answers.get(c)) not in {'1','2','3','4','5'}}
+	if missing or invalid:
+		return jsonify({'error': 'validation', 'missing': missing, 'invalid': invalid}), 400
+	with Session(engine) as s:
+		ux_q = s.query(Questionnaire).filter_by(code='ux_survey').first()
+		if not ux_q:
+			return jsonify({'error': 'not_configured'}), 404
+		vers_sorted = sorted(ux_q.versions, key=lambda v: v.version_number, reverse=True)
+		ux_pub = next((v for v in vers_sorted if v.status=='published'), vers_sorted[0] if vers_sorted else None)
+		if not ux_pub:
+			return jsonify({'error': 'no_version'}), 409
+		assign = s.query(QuestionnaireAssignment).filter_by(user_code=user_code, questionnaire_version_id=ux_pub.id).first()
+		if assign and assign.status=='finalized':
+			return jsonify({'message': 'already_finalized'}), 200
+		if not assign:
+			assign = QuestionnaireAssignment(user_code=user_code, questionnaire_version_id=ux_pub.id, status='in_progress')
+			s.add(assign)
+			s.flush()
+		resp = s.query(Response).filter_by(assignment_id=assign.id).order_by(desc(Response.id)).first()
+		if not resp:
+			resp = Response(assignment_id=assign.id)
+			s.add(resp)
+			s.flush()
+		# map preguntas
+		qmap = {}
+		for sec in ux_pub.sections:
+			for qu in sec.questions:
+				qmap[qu.code] = qu
+		for code_key, value in answers.items():
+			qu = qmap.get(code_key)
+			if not qu:
+				continue
+			item = s.query(ResponseItem).filter_by(response_id=resp.id, question_id=qu.id).first()
+			val_str = str(value)
+			num_val = int(val_str)
+			if item:
+				item.value = val_str
+				item.numeric_value = num_val
+			else:
+				s.add(ResponseItem(response_id=resp.id, question_id=qu.id, value=val_str, numeric_value=num_val))
+		assign.status = 'finalized'
+		resp.finalized_at = func.now()
+		# Optional comment stored in summary_cache (no change de estructura)
+		try:
+			sc = resp.summary_cache or {}
+			if comment:
+				sc['ux_comment'] = comment
+			resp.summary_cache = sc
+		except Exception:
+			pass
+		resp.submitted_at = func.now()
+		s.commit()
+		return jsonify({'message': 'stored', 'assignment_id': assign.id, 'response_id': resp.id}), 201
 
 # --- Helpers ---
 
@@ -555,7 +684,7 @@ def my_questionnaires():
 		result = []
 		qs = s.query(Questionnaire).filter(Questionnaire.status == "active").all()
 		for q in qs:
-			if getattr(q, 'is_primary', False):
+			if getattr(q, 'is_primary', False) or q.code == 'ux_survey':
 				continue
 			versions_sorted = sorted(q.versions, key=lambda v: v.version_number, reverse=True)
 			target_version = next((v for v in versions_sorted if v.status == "published"), None)
