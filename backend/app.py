@@ -1,5 +1,6 @@
 import os
 import uuid
+from datetime import datetime
 from flask import Flask, jsonify
 from flask_cors import CORS
 # Cargar .env ANTES de importar módulos que crean el engine
@@ -82,6 +83,7 @@ def create_app():
         return jsonify({
             "status": "ok",
             "message": "API del servicio STEM-Vocacional está funcionando.",
+            "timestamp": datetime.utcnow().isoformat() + "Z",
             "environment": os.environ.get('FLASK_ENV', 'development'),
             "instance_id": app.config.get('INSTANCE_ID')
         }), 200
