@@ -29,28 +29,53 @@ This README gives a practical overview. For operational steps and technical comm
 
 ## Quick Start (local)
 
-1) Requirements: Python 3.11+, Node.js 18+, ODBC Driver 17/18, and an accessible SQL Server.
-2) Install dependencies:
+1) Requirements: Python 3.11+ (tested on 3.12.8), Node.js 18+, ODBC Driver 17 or 18, and an accessible SQL Server instance.
+2) (Optional but recommended) Create and activate a virtual environment:
+
+```powershell
+python -m venv .venv
+./.venv/Scripts/Activate.ps1
+```
+
+3) Install dependencies:
 
 ```powershell
 pip install -r requirements.txt
 cd frontend; npm install; cd ..
 ```
 
-3) Create a `.env` from `.env.example` (do not commit it).
-4) Seed base content:
+4) Create a `.env` from `.env.example` (do not commit it). Fill in DB credentials and a strong `SECRET_KEY`.
+5) Seed base questionnaire/content:
 
 ```powershell
 python manage.py seed-dynamic
 ```
 
-5) Start backend + frontend:
+6) (Optional) Create an admin user for local testing:
+
+```powershell
+python manage.py add-admin my_admin_code --password MySecurePass123
+```
+
+7) Start backend + frontend:
 
 ```powershell
 python manage.py run-public-full
 ```
 
 Backend: http://localhost:5000  |  Frontend: http://localhost:3000  |  Health: http://localhost:5000/api/health
+
+8) (Optional) Run tests once the backend is up:
+
+```powershell
+python run_tests.py
+```
+
+9) (Optional) Recompute ML results for existing finalized responses if you later change the model binding:
+
+```powershell
+python manage.py recompute-ml --code vocacional --only-finalized --dry-run
+```
 
 ## Usage (flows)
 
@@ -139,8 +164,9 @@ Wizard endpoints:
 
 ### Where to place the model artifact (.joblib)
 
-- Recommended: create a `models/` folder at the repo root and place the file there, e.g. `models/model.joblib`. In the binding use `"artifact_path": "models/model.joblib"`.
+- Recommended: create a `models/` folder at the repo root and place the file there, e.g. `models/model.joblib` then reference it in the binding.
 - Alternative: `backend/models/...` also works. The loader will search by basename in `models/` and `backend/models/` if the primary relative path does not exist.
+- After updating a binding or artifact you can recompute historical summaries with `python manage.py recompute-ml --version-id <ID> --only-finalized`.
 - Environments: you may use an env var with `artifact_path: "env:ML_ARTIFACT_PATH"` and define `ML_ARTIFACT_PATH` to an absolute path in the server.
 
 Notes:
